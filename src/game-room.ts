@@ -89,10 +89,15 @@ export class GameRoom extends DurableObject<Env> {
 		}
 	}
 
-	async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
-		// Complete the close handshake (the runtime doesn't do it for us), then tell the other
-		// player their opponent dropped. We don't free the seat: they can come back with their token.
-		ws.close(code, reason);
+	async webSocketClose(ws: WebSocket): Promise<void> {
+		// Complete the close handshake. Don't echo the client's code back: 1005 ("no code") and
+		// 1006 ("connection dropped") are reserved and can't be sent, so close() would throw.
+		// Newer runtimes may have already replied for us, which also makes close() throw.
+		try {
+			ws.close(1000, "Closed");
+		} catch {}
+		// Tell the other player their opponent dropped. We don't free the seat: they can come
+		// back with their token.
 		const room = this.load();
 		if (room) this.broadcastState(room);
 	}

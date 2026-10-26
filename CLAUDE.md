@@ -50,6 +50,7 @@ without asking. Card definitions are placeholders until the design is settled.
 
 - `npm run dev` — build the client and run `wrangler dev` (http://localhost:8787)
 - `npm run check` — typecheck server, shared and client code
+- `npm run test:e2e` — protocol test against a running `npm run dev`
 - `npx wrangler types` — regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc`
 
 ## Git workflow
