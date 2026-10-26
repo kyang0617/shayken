@@ -20,7 +20,7 @@ export type ClientMessage =
 
 // ---- Server -> Client (WebSocket) ----
 
-export type ErrorCode = "ROOM_NOT_FOUND" | "ROOM_FULL" | "BAD_TOKEN" | "BAD_MESSAGE" | "NOT_JOINED";
+export type ErrorCode = "ROOM_NOT_FOUND" | "ROOM_FULL" | "BAD_TOKEN" | "BAD_MESSAGE" | "NOT_JOINED" | "ROOM_EXPIRED";
 
 export type ServerMessage =
 	/** Sent once when you take or reclaim a seat. Keep `token` secret — it is your identity. */
@@ -46,4 +46,6 @@ export const CloseCode = {
 	Replaced: 4001,
 	/** The join failed; see the preceding error message. */
 	JoinFailed: 4002,
+	/** The room was deleted after being abandoned; see the preceding error message. */
+	Expired: 4003,
 } as const;
