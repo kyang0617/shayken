@@ -1,0 +1,9 @@
+{
+	// Browser code gets DOM types; the Worker (root tsconfig) does not.
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"lib": ["es2024", "dom", "dom.iterable"],
+		"types": []
+	},
+	"include": ["./**/*.ts", "../shared/**/*.ts"]
+}

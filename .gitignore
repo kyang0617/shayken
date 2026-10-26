@@ -165,3 +165,6 @@ dist
 .env*
 !.env.example
 .wrangler/
+
+# Built client bundle (generated from client/ by esbuild)
+public/main.js
