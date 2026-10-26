@@ -55,7 +55,7 @@ function connect(code: string): void {
 				render(msg.view);
 				break;
 			case "error":
-				if (msg.code === "BAD_TOKEN") sessionStorage.removeItem(tokenKey(code));
+				if (msg.code === "BAD_TOKEN" || msg.code === "ROOM_EXPIRED") sessionStorage.removeItem(tokenKey(code));
 				setStatus(`Error: ${msg.message}`);
 				break;
 		}
@@ -64,8 +64,9 @@ function connect(code: string): void {
 	ws.addEventListener("close", (e) => {
 		if (socket !== ws) return; // we closed it ourselves to switch rooms
 		if (e.code === CloseCode.Replaced) setStatus("This seat was opened in another tab.");
+		else if (e.code === CloseCode.Expired) setStatus("Room closed after being abandoned. Create a new one.");
 		else if (e.code !== CloseCode.JoinFailed) setStatus("Disconnected. Refresh to reconnect.");
-		if (e.code === CloseCode.JoinFailed) showLobby();
+		if (e.code === CloseCode.JoinFailed || e.code === CloseCode.Expired) showLobby();
 	});
 }
 
