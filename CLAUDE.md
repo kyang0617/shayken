@@ -35,9 +35,14 @@ without asking. Card definitions are placeholders until the design is settled.
 
 - Durable Objects must be SQLite-backed: migrations use `new_sqlite_classes`.
 - Use the WebSocket Hibernation API (`ctx.acceptWebSocket`, `webSocketMessage`,
-  `webSocketClose`) — never `ws.accept()` — so idle rooms don't burn duration.
+  `webSocketClose`) — never `ws.accept()` — so idle rooms don't burn duration. "Idle" includes
+  the gaps between messages in an active match (players thinking), which is most of a game.
 - Because a hibernated DO loses in-memory state, persist room state to `ctx.storage` and
   per-socket identity via `ws.serializeAttachment`. Don't rely on instance fields surviving.
+- Timers (turn timer, timeouts, cleanup) use Durable Object alarms (`ctx.storage.setAlarm` +
+  an `alarm()` handler) — never `setTimeout`/`setInterval`. A pending JS timer keeps the
+  object awake and billed; an alarm lets it hibernate and wakes it when due. A DO has one
+  alarm at a time, so store the deadline(s) in state and set the alarm to the earliest one.
 
 ## Layout
 
