@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "shayken",
+  "name": "play",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
   // Static frontend served by the same Worker. Requests matching a file in ./public are served
