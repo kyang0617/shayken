@@ -16,6 +16,14 @@ interface RoomState {
 	createdAt: number;
 	status: "waiting" | "dealt";
 	players: [PlayerState | null, PlayerState | null]; // index = seat
+	reap: ReapTimer | null; // null while both players are connected
+}
+
+// Why the room is counting down to deletion, and when. We keep the reason so that events
+// that don't change the connected count (e.g. a duplicated tab) don't restart the clock.
+interface ReapTimer {
+	reason: "empty" | "solo";
+	at: number; // epoch ms
 }
 
 // What we attach to each WebSocket. Attachments survive hibernation; instance fields don't.
@@ -55,8 +63,68 @@ export class GameRoom extends DurableObject<Env> {
 	 */
 	async create(code: string): Promise<boolean> {
 		if (this.load()) return false;
-		this.save({ code, createdAt: Date.now(), status: "waiting", players: [null, null] });
+		const room: RoomState = { code, createdAt: Date.now(), status: "waiting", players: [null, null], reap: null };
+		// Nobody is connected yet, so this starts the "empty" timer: a room that's created but
+		// never joined gets cleaned up too.
+		this.updateReaper(room);
+		this.save(room);
 		return true;
+	}
+
+	// ---- Reaping ----
+	//
+	// Abandoned rooms are deleted so storage doesn't grow forever. A Durable Object alarm
+	// drives it: the alarm survives hibernation and wakes the object when due, whereas a
+	// setTimeout would keep it awake (and billed) the whole time. A DO has only one alarm, so
+	// `room.reap` is the single deadline and the alarm always mirrors it.
+
+	/** Recompute the reap deadline. Call after anything that may change who is connected. */
+	private updateReaper(room: RoomState): void {
+		const connected = this.connectedSeats().size;
+		const reason = connected === 2 ? null : connected === 1 ? "solo" : "empty";
+
+		if (reason === null) {
+			room.reap = null;
+			this.ctx.storage.deleteAlarm();
+			return;
+		}
+		// Only start a new countdown when the situation changes, so e.g. a solo player
+		// refreshing (solo -> empty -> solo) does restart it, but a duplicated tab doesn't.
+		if (room.reap?.reason !== reason) {
+			const seconds = Number(reason === "solo" ? this.env.REAP_SOLO_SECONDS : this.env.REAP_EMPTY_SECONDS);
+			room.reap = { reason, at: Date.now() + seconds * 1000 };
+		}
+		this.ctx.storage.setAlarm(room.reap!.at);
+	}
+
+	async alarm(): Promise<void> {
+		const room = this.load();
+		if (!room?.reap) return;
+
+		// Re-check who is actually connected before deleting anything. If someone came back,
+		// this clears or pushes back the deadline instead (and re-arms the alarm).
+		this.updateReaper(room);
+		if (!room.reap || Date.now() < room.reap.at) return this.save(room);
+
+		for (const ws of this.ctx.getWebSockets()) {
+			this.sendError(ws, "ROOM_EXPIRED", "Room closed after being abandoned");
+			try {
+				ws.close(CloseCode.Expired, "Room expired");
+			} catch {}
+		}
+		// With no stored data left, the object effectively ceases to exist and the code is free.
+		await this.ctx.storage.deleteAlarm();
+		await this.ctx.storage.deleteAll();
+	}
+
+	/** Seats with at least one open socket that has joined. Unjoined sockets don't count. */
+	private connectedSeats(): Set<Seat> {
+		const seats = new Set<Seat>();
+		for (const ws of this.ctx.getWebSockets()) {
+			const { seat } = getAttachment(ws);
+			if (ws.readyState === WebSocket.OPEN && seat !== null) seats.add(seat);
+		}
+		return seats;
 	}
 
 	// ---- WebSocket lifecycle ----
@@ -97,9 +165,12 @@ export class GameRoom extends DurableObject<Env> {
 			ws.close(1000, "Closed");
 		} catch {}
 		// Tell the other player their opponent dropped. We don't free the seat: they can come
-		// back with their token.
+		// back with their token (until the room is reaped).
 		const room = this.load();
-		if (room) this.broadcastState(room);
+		if (!room) return;
+		this.updateReaper(room);
+		this.save(room);
+		this.broadcastState(room);
 	}
 
 	// ---- Handlers ----
@@ -127,6 +198,7 @@ export class GameRoom extends DurableObject<Env> {
 		ws.serializeAttachment({ seat } satisfies SocketAttachment);
 
 		if (room.status === "waiting" && room.players[0] && room.players[1]) deal(room);
+		this.updateReaper(room); // this socket now counts as connected
 		this.save(room);
 
 		this.send(ws, { type: "joined", seat, token: room.players[seat]!.token });
