@@ -1,23 +1,35 @@
 {
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "shayken",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
-  "migrations": [
-    {
-      "new_sqlite_classes": [
-        "MyDurableObject"
-      ],
-      "tag": "v1"
-    }
-  ],
+  // Static frontend served by the same Worker. Requests matching a file in ./public are served
+  // directly (free, no Worker invocation); only /api/* runs our code.
+  "assets": {
+    "directory": "./public",
+    "run_worker_first": ["/api/*"]
+  },
+  // Bundle client/main.ts -> public/main.js before `wrangler dev`/`deploy`, and rebuild on change.
+  "build": {
+    "command": "npm run build:client",
+    "watch_dir": ["client", "shared"]
+  },
   "durable_objects": {
     "bindings": [
       {
-        "class_name": "MyDurableObject",
-        "name": "MY_DURABLE_OBJECT"
+        "class_name": "GameRoom",
+        "name": "GAME_ROOM"
       }
     ]
   },
+  // The free plan only allows SQLite-backed Durable Objects, declared via new_sqlite_classes.
+  // Never edit an applied migration; add a new tag instead (this one has never been deployed).
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["GameRoom"]
+    }
+  ],
   "observability": {
     "enabled": true
   }

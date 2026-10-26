@@ -3,12 +3,16 @@
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {
-		"deploy": "wrangler deploy",
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
-		"cf-typegen": "wrangler types"
+		"deploy": "wrangler deploy",
+		"build:client": "esbuild client/main.ts --bundle --format=esm --target=es2022 --outfile=public/main.js",
+		"check": "tsc --noEmit && tsc --noEmit -p client",
+		"cf-typegen": "wrangler types",
+		"test:e2e": "node test/e2e.mjs"
 	},
 	"devDependencies": {
+		"esbuild": "^0.28.2",
 		"typescript": "^7.0.2",
 		"wrangler": "^4.152.0"
 	}

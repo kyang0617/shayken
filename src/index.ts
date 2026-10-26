@@ -1,64 +1,40 @@
-import { DurableObject } from "cloudflare:workers";
+import type { CreateRoomResponse } from "../shared/protocol";
+import { randomRoomCode, ROOM_CODE_PATTERN } from "./random";
 
-/**
- * Welcome to Cloudflare Workers! This is your first Durable Objects application.
- *
- * - Run `npm run dev` in your terminal to start a development server
- * - Open a browser tab at http://localhost:8787/ to see your Durable Object in action
- * - Run `npm run deploy` to publish your application
- *
- * Bind resources to your worker in `wrangler.jsonc`. After adding bindings, a type definition for the
- * `Env` object can be regenerated with `npm run cf-typegen`.
- *
- * Learn more at https://developers.cloudflare.com/durable-objects
- */
+export { GameRoom } from "./game-room";
 
-/** A Durable Object's behavior is defined in an exported Javascript class */
-export class MyDurableObject extends DurableObject<Env> {
-	/**
-	 * The constructor is invoked once upon creation of the Durable Object, i.e. the first call to
-	 * 	`DurableObjectStub::get` for a given identifier (no-op constructors can be omitted)
-	 *
-	 * @param ctx - The interface for interacting with Durable Object state
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 */
-	constructor(ctx: DurableObjectState, env: Env) {
-		super(ctx, env);
-	}
-
-	/**
-	 * The Durable Object exposes an RPC method sayHello which will be invoked when a Durable
-	 *  Object instance receives a request from a Worker via the same method invocation on the stub
-	 *
-	 * @param name - The name provided to a Durable Object instance from a Worker
-	 * @returns The greeting to be sent back to the Worker
-	 */
-	async sayHello(name: string): Promise<string> {
-		return `Hello, ${name}!`;
-	}
-}
+// The Worker is a thin, stateless router. It owns no game state: it just finds the right
+// GameRoom Durable Object for a room code and hands the request over. Static files in
+// `public/` are served by the assets layer before this code runs; only `/api/*` reaches here.
 
 export default {
-	/**
-	 * This is the standard fetch handler for a Cloudflare Worker
-	 *
-	 * @param request - The request submitted to the Worker from the client
-	 * @param env - The interface to reference bindings declared in wrangler.jsonc
-	 * @param ctx - The execution context of the Worker
-	 * @returns The response to be sent back to the client
-	 */
-	async fetch(request, env, ctx): Promise<Response> {
-		// Create a stub to open a communication channel with the Durable Object
-		// instance named "foo".
-		//
-		// Requests from all Workers to the Durable Object instance named "foo"
-		// will go to a single remote Durable Object instance.
-		const stub = env.MY_DURABLE_OBJECT.getByName("foo");
+	async fetch(request, env): Promise<Response> {
+		const url = new URL(request.url);
 
-		// Call the `sayHello()` RPC method on the stub to invoke the method on
-		// the remote Durable Object instance.
-		const greeting = await stub.sayHello("world");
+		if (url.pathname === "/api/rooms" && request.method === "POST") {
+			return createRoom(env);
+		}
 
-		return new Response(greeting);
+		const wsMatch = url.pathname.match(/^\/api\/rooms\/([^/]+)\/ws$/);
+		if (wsMatch && request.method === "GET") {
+			const code = wsMatch[1].toUpperCase();
+			if (!ROOM_CODE_PATTERN.test(code)) return new Response("Invalid room code", { status: 400 });
+			// `getByName` always maps the same code to the same object, anywhere in the world.
+			return env.GAME_ROOM.getByName(code).fetch(request);
+		}
+
+		return new Response("Not found", { status: 404 });
 	},
 } satisfies ExportedHandler<Env>;
+
+async function createRoom(env: Env): Promise<Response> {
+	// 32^6 ≈ 1 billion codes, so collisions are rare — but the room itself is the only place
+	// that knows whether a code is taken, so we ask it and retry on a clash.
+	for (let attempt = 0; attempt < 5; attempt++) {
+		const code = randomRoomCode();
+		if (await env.GAME_ROOM.getByName(code).create(code)) {
+			return Response.json({ code } satisfies CreateRoomResponse);
+		}
+	}
+	return new Response("Could not allocate a room code", { status: 503 });
+}
