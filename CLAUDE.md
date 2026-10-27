@@ -19,10 +19,19 @@ when making changes — the owner wants to understand the code, not just have it
   - **power** — stays active for the rest of the match (per-turn bonuses).
 - Theme: drinks/potions. The brew is the potion you're building. Both brews are fully visible
   to both players.
+- **Throwing:** only when ending your turn — "end turn (hold)" or "throw & end turn". Throwing
+  an empty brew is rejected. A turn that times out holds the brew. Each ingredient's `onThrow`
+  effects resolve; the brew then goes to the discard pile (so it cycles back into the deck).
+  Damage reduces the opponent's health; at 0 the thrower wins.
+- **Throw damage** = (sum of `damage` + sum of `damagePerIngredient` × brew size) × product of
+  `multiplyDamage`. One implementation, `shared/brew.ts` `brewDamage`, used by the server to
+  resolve and by the client to preview — never reimplement it.
+- **Holding a brew is rewarded only by catalyst cards** (e.g. Distillate: +1 per ingredient;
+  Philosopher's Salt: ×2), not by a built-in size bonus.
 
-**Undecided — do not invent without asking:** what throwing the brew does and when you can
-throw (attacks currently just accumulate in the brew), anything that deals damage, card
-numbers/balance, tiers, deckbuilding. Card definitions are placeholders.
+**Undecided — do not invent without asking:** defense/blocking, any damage outside throwing,
+disruption of the opponent's brew, card numbers/balance, tiers, deckbuilding. Card
+definitions and numbers are placeholders.
 
 ## Architecture rules (decided — follow these)
 
@@ -91,6 +100,6 @@ numbers/balance, tiers, deckbuilding. Card definitions are placeholders.
 
 - **Done:** rooms by code, secret tokens, per-player views, hibernation, room reaping;
   turn loop (draw / play / end turn), essence, attack/skill/power cards, brew and powers,
-  turn timer, concede.
-- **Next:** design and implement throwing the brew (and therefore damage).
+  turn timer, concede; throwing the brew, damage and winning.
+- **Next:** playtest; then decide what else cards should do (see Undecided) and balance.
 - **Later:** client auto-reconnect, deckbuilding, more cards/tiers, lobby, auto-deploy.
