@@ -10,9 +10,9 @@
 		"check": "tsc --noEmit && tsc --noEmit -p client",
 		"cf-typegen": "wrangler types",
 		"test:e2e": "node test/e2e.mjs",
-		"dev:reap": "wrangler dev --var REAP_EMPTY_SECONDS:2 --var REAP_SOLO_SECONDS:4",
-		"test:reap": "node test/reap.mjs",
-		"test": "vitest run test/unit"
+		"test": "vitest run test/unit",
+		"dev:fast": "wrangler dev --var REAP_EMPTY_SECONDS:2 --var REAP_SOLO_SECONDS:4 --var TURN_SECONDS:3",
+		"test:timers": "node test/timers.mjs"
 	},
 	"devDependencies": {
 		"esbuild": "^0.28.2",

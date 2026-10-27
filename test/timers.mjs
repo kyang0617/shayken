@@ -1,11 +1,14 @@
-// Room reaping test. Needs a dev server with tiny reap timings:
-//   npm run dev:reap        (REAP_EMPTY_SECONDS=2, REAP_SOLO_SECONDS=4)
-//   npm run test:reap
-// Scenarios run in parallel, each in its own room, so the whole test takes ~8s.
+// Timer tests (turn timer + room reaping). Needs a dev server with tiny timings:
+//   npm run dev:fast        (REAP_EMPTY_SECONDS=2, REAP_SOLO_SECONDS=4, TURN_SECONDS=3)
+//   npm run test:timers
+// Scenarios run in parallel, each in its own room, so the whole test takes ~8s. Turn and
+// reap deadlines share one Durable Object alarm, so running them together also checks that
+// neither overwrites the other.
 import { check, createRoom, finish, join, sleep } from "./helpers.mjs";
 
 const EMPTY_MS = 2000;
 const SOLO_MS = 4000;
+const TURN_MS = 3000;
 const SLACK_MS = 2500; // alarms aren't to-the-millisecond
 
 async function neverJoined() {
@@ -62,5 +65,21 @@ async function opponentReturns() {
   a.ws.close(); b2.ws.close();
 }
 
-await Promise.all([neverJoined(), soloPlayer(), bothLeave(), refreshWithinGrace(), opponentReturns()]);
+async function turnTimer() {
+  const code = await createRoom();
+  const a = await join(code);
+  const b = await join(code);
+  await a.until((c) => c.last("state")?.view.status === "playing");
+  const first = a.last("state").view.turn.seat;
+  const active = first === 0 ? a : b;
+  check(active.last("state").view.you.hand.length === 5, "first player has a hand before the timer runs out");
+  await a.until((c) => c.last("state").view.turn?.number === 2, TURN_MS + SLACK_MS);
+  check(a.last("state").view.turn.seat !== first, "turn auto-passes when the timer runs out");
+  check(active.last("state").view.you.hand.length === 0, "timed-out player's hand is discarded");
+  await a.until((c) => c.last("state").view.turn?.number === 3, TURN_MS + SLACK_MS);
+  check(a.last("state").view.turn.seat === first, "timer keeps running on the following turn");
+  a.ws.close(); b.ws.close();
+}
+
+await Promise.all([neverJoined(), soloPlayer(), bothLeave(), refreshWithinGrace(), opponentReturns(), turnTimer()]);
 finish();

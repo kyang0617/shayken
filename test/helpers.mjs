@@ -20,8 +20,9 @@ export function client(code) {
   ws.onclose = (e) => { c.closed = e.code; c.waiters.forEach((w) => w()); };
   c.open = new Promise((r) => (ws.onopen = r));
   c.until = (pred, ms = 3000) => new Promise((res, rej) => {
-    const t = setTimeout(() => rej(new Error("timeout")), ms);
-    const w = () => { if (pred(c)) { clearTimeout(t); res(); } };
+    const done = () => { clearTimeout(t); c.waiters = c.waiters.filter((x) => x !== w); };
+    const t = setTimeout(() => { done(); rej(new Error("timeout")); }, ms);
+    const w = () => { if (pred(c)) { done(); res(); } };
     c.waiters.push(w); w();
   });
   c.last = (type) => [...c.msgs].reverse().find((m) => m.type === type);
