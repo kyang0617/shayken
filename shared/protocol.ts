@@ -14,13 +14,30 @@ export interface CreateRoomResponse {
 
 // ---- Client -> Server (WebSocket) ----
 
+// Messages express intent ("I want to play this card"), never outcomes. The server decides
+// whether it's legal and what happens.
 export type ClientMessage =
 	/** First message after connecting. Send your token to reclaim your seat; omit it to take an open one. */
-	{ type: "join"; token?: string };
+	| { type: "join"; token?: string }
+	/** Play a card from your hand, identified by its instance id. */
+	| { type: "playCard"; iid: string }
+	| { type: "endTurn" }
+	| { type: "concede" };
 
 // ---- Server -> Client (WebSocket) ----
 
-export type ErrorCode = "ROOM_NOT_FOUND" | "ROOM_FULL" | "BAD_TOKEN" | "BAD_MESSAGE" | "NOT_JOINED" | "ROOM_EXPIRED";
+export type ErrorCode =
+	| "ROOM_NOT_FOUND"
+	| "ROOM_FULL"
+	| "BAD_TOKEN"
+	| "BAD_MESSAGE"
+	| "NOT_JOINED"
+	| "ROOM_EXPIRED"
+	// Rejected game actions:
+	| "NOT_PLAYING"
+	| "NOT_YOUR_TURN"
+	| "CARD_NOT_IN_HAND"
+	| "NOT_ENOUGH_ESSENCE";
 
 export type ServerMessage =
 	/** Sent once when you take or reclaim a seat. Keep `token` secret — it is your identity. */
@@ -35,9 +52,26 @@ export type ServerMessage =
  */
 export interface PlayerView {
 	roomCode: string;
-	status: "waiting" | "dealt";
-	you: { seat: Seat; hand: CardInstance[]; deckCount: number };
-	opponent: { connected: boolean; handCount: number; deckCount: number } | null;
+	/** waiting: fewer than two players have joined. playing: turns are running. finished: someone won. */
+	status: "waiting" | "playing" | "finished";
+	/**
+	 * Whose turn it is. `msLeft` is relative rather than a timestamp so the countdown is right
+	 * even if the player's clock is off.
+	 */
+	turn: { seat: Seat; number: number; msLeft: number } | null;
+	winner: Seat | null;
+	you: PublicPlayerView & { seat: Seat; hand: CardInstance[] };
+	opponent: (PublicPlayerView & { connected: boolean; handCount: number }) | null;
+}
+
+/** What both players can see about a player. Deck order and hand contents are never here. */
+export interface PublicPlayerView {
+	health: number;
+	essence: number;
+	deckCount: number;
+	discardCount: number;
+	brew: CardInstance[];
+	powers: CardInstance[];
 }
 
 /** WebSocket close codes we send (4000-4999 is reserved for applications). */
