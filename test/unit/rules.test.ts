@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { CardId, CardInstance } from "../../shared/cards";
+import { brewDamage } from "../../shared/brew";
 import { DECK_SIZE, STARTER_DECK } from "../../shared/decks";
 import { ESSENCE_PER_TURN, HAND_SIZE, STARTING_HEALTH } from "../../shared/rules";
 import { concede, endTurn, newPlayer, playCard, startMatch } from "../../src/rules";
@@ -212,5 +213,94 @@ describe("concede", () => {
 		expect(concede(room, 1).ok).toBe(true);
 		expect(room).toMatchObject({ status: "finished", winner: 0, turn: null });
 		expect(playCard(room, 0, "x")).toMatchObject({ ok: false, code: "NOT_PLAYING" });
+	});
+});
+
+describe("brewDamage", () => {
+	const brew = (...ids: CardId[]) => ids.map(card);
+
+	it("sums each ingredient's damage", () => {
+		expect(brewDamage(brew("fire_salt", "nightshade", "wyrm_bile"))).toBe(2 + 3 + 5);
+	});
+
+	it("counts ingredients with no throw effect toward size but adds no damage", () => {
+		expect(brewDamage(brew("troll_moss"))).toBe(0);
+		expect(brewDamage(brew("troll_moss", "quicksilver", "distillate"))).toBe(3); // +1 x 3 ingredients
+	});
+
+	it("applies multipliers after all additive damage, regardless of order", () => {
+		const a = brewDamage(brew("philosophers_salt", "fire_salt", "distillate"));
+		const b = brewDamage(brew("fire_salt", "distillate", "philosophers_salt"));
+		expect(a).toBe((2 + 3) * 2);
+		expect(b).toBe(a);
+	});
+
+	it("stacks multiple multipliers", () => {
+		expect(brewDamage(brew("fire_salt", "philosophers_salt", "philosophers_salt"))).toBe(2 * 4);
+	});
+
+	it("rewards holding: one big throw beats the same cards thrown separately", () => {
+		const together = brewDamage(brew("fire_salt", "nightshade", "distillate"));
+		const apart = brewDamage(brew("fire_salt")) + brewDamage(brew("nightshade")) + brewDamage(brew("distillate"));
+		expect(together).toBeGreaterThan(apart);
+	});
+});
+
+describe("throwing", () => {
+	/** Seat 0 is active with `brewIds` already in the brew; seat 1 has a deck to draw from. */
+	function roomWithBrew(brewIds: CardId[]): RoomState {
+		const room = roomWithHand(["honey_mead"]);
+		room.players[0]!.brew = brewIds.map(card);
+		room.players[1]!.deck = Array.from({ length: 10 }, () => card("fire_salt"));
+		return room;
+	}
+
+	it("deals the brew's damage, empties it into discard, records it, and passes the turn", () => {
+		const room = roomWithBrew(["fire_salt", "nightshade"]);
+		const thrown = room.players[0]!.brew.map((c) => c.iid);
+		expect(endTurn(room, 0, TURN_MS, NOW, true).ok).toBe(true);
+		expect(room.players[1]!.health).toBe(STARTING_HEALTH - 5);
+		expect(room.players[0]!.brew).toHaveLength(0);
+		expect(room.players[0]!.discard.map((c) => c.iid)).toEqual(expect.arrayContaining(thrown));
+		expect(room.lastThrow).toMatchObject({ seat: 0, turn: 1, damage: 5 });
+		expect(room.lastThrow!.cards.map((c) => c.iid)).toEqual(thrown);
+		expect(room.turn!.seat).toBe(1);
+	});
+
+	it("ending without throwing holds the brew", () => {
+		const room = roomWithBrew(["fire_salt"]);
+		endTurn(room, 0, TURN_MS, NOW);
+		expect(room.players[0]!.brew).toHaveLength(1);
+		expect(room.players[1]!.health).toBe(STARTING_HEALTH);
+		expect(room.lastThrow).toBeNull();
+	});
+
+	it("rejects throwing an empty brew without ending the turn", () => {
+		const room = roomWithBrew([]);
+		expect(endTurn(room, 0, TURN_MS, NOW, true)).toMatchObject({ ok: false, code: "EMPTY_BREW" });
+		expect(room.turn!.seat).toBe(0);
+	});
+
+	it("rejects throwing on the opponent's turn", () => {
+		const room = roomWithBrew(["fire_salt"]);
+		room.players[1]!.brew = [card("fire_salt")];
+		expect(endTurn(room, 1, TURN_MS, NOW, true)).toMatchObject({ ok: false, code: "NOT_YOUR_TURN" });
+		expect(room.players[0]!.health).toBe(STARTING_HEALTH);
+	});
+
+	it("reducing the opponent to 0 wins the match, and health doesn't go negative", () => {
+		const room = roomWithBrew(["wyrm_bile", "philosophers_salt"]); // 10 damage
+		room.players[1]!.health = 7;
+		endTurn(room, 0, TURN_MS, NOW, true);
+		expect(room.players[1]!.health).toBe(0);
+		expect(room).toMatchObject({ status: "finished", winner: 0, turn: null });
+	});
+
+	it("a throw that leaves the opponent alive keeps the match going", () => {
+		const room = roomWithBrew(["fire_salt"]);
+		room.players[1]!.health = 3;
+		endTurn(room, 0, TURN_MS, NOW, true);
+		expect(room.players[1]!.health).toBe(1);
+		expect(room.status).toBe("playing");
 	});
 });
