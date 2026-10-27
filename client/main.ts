@@ -124,7 +124,57 @@ function render(view: PlayerView): void {
 	else if (view.status === "finished") setStatus(view.winner === me.seat ? "You win! 🎉" : "You lost.");
 	else setStatus("");
 	updateTurnLabel();
+	renderResult(view);
 }
+
+// ---- Win / lose screen ----
+
+let resultDismissed = false; // "View board" hides it for the rest of this match
+
+function renderResult(view: PlayerView): void {
+	const overlay = $("result");
+	if (view.status !== "finished" || !view.opponent) {
+		overlay.hidden = true;
+		resultDismissed = false;
+		return;
+	}
+	const me = view.you;
+	const opp = view.opponent;
+	const won = view.winner === me.seat;
+	const loser = won ? opp : me;
+	// The server doesn't send an explicit end reason: a loser at 0 health was knocked out by
+	// the last throw; otherwise they conceded.
+	const knockout = loser.health === 0;
+	const t = view.lastThrow;
+
+	$("result-title").textContent = won ? "Victory!" : "Defeat";
+	overlay.classList.toggle("won", won);
+	$("result-detail").textContent = knockout && t
+		? `${won ? "Your" : "Your opponent's"} ${t.cards.length}-ingredient brew hit for ${t.damage} damage.`
+		: won ? "Your opponent conceded." : "You conceded.";
+	$("result-stats").textContent = `Final health — you ${me.health}, opponent ${opp.health}`;
+	$("result-brew").replaceChildren(...(knockout && t ? t.cards.map((c) => renderCard(c)) : []));
+	overlay.hidden = resultDismissed;
+}
+
+$("result-close").addEventListener("click", () => {
+	resultDismissed = true;
+	$("result").hidden = true;
+});
+
+$("result-lobby").addEventListener("click", () => {
+	// Leave the finished room: forget its token and go back to create/join.
+	const code = lastView?.roomCode;
+	const ws = socket;
+	socket = null; // so the close handler doesn't report a disconnect
+	ws?.close();
+	if (code) sessionStorage.removeItem(tokenKey(code));
+	lastView = null;
+	$("result").hidden = true;
+	resultDismissed = false;
+	showLobby();
+	setStatus("");
+});
 
 function renderCard(card: CardInstance, playable = false): HTMLElement {
 	const def = CARDS[card.cardId];
