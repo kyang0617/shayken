@@ -41,6 +41,9 @@ export class GameRoom extends DurableObject<Env> {
 	 * no handler can forget to — every state change goes through here.
 	 */
 	private persist(room: RoomState): void {
+		// Every path that ends a match (throw, concede) saves through here, so this is the one
+		// place the post-match expiry is set.
+		if (room.status === "finished") room.expiresAt ??= Date.now() + Number(this.env.REAP_FINISHED_SECONDS) * 1000;
 		this.updateReaper(room);
 		this.syncAlarm(room);
 		this.ctx.storage.kv.put(ROOM_KEY, room);
@@ -70,13 +73,13 @@ export class GameRoom extends DurableObject<Env> {
 
 	// ---- Timers: turn timer + reaping, sharing one alarm ----
 	//
-	// Both timers use a Durable Object alarm: it survives hibernation and wakes the object when
+	// All timers use a Durable Object alarm: it survives hibernation and wakes the object when
 	// due, whereas a setTimeout would keep it awake (and billed) the whole time. A DO has only
-	// ONE alarm, so the deadlines live in state (`room.turn.endsAt`, `room.reap.at`), the alarm
-	// is set to the earliest, and alarm() checks which one(s) are due.
+	// ONE alarm, so the deadlines live in state (`room.turn.endsAt`, `room.reap.at`,
+	// `room.expiresAt`), the alarm is set to the earliest, and alarm() checks which are due.
 
 	private syncAlarm(room: RoomState): void {
-		const deadlines = [room.turn?.endsAt, room.reap?.at].filter((t): t is number => t !== undefined);
+		const deadlines = [room.turn?.endsAt, room.reap?.at, room.expiresAt].filter((t): t is number => t !== undefined);
 		if (deadlines.length === 0) this.ctx.storage.deleteAlarm();
 		else this.ctx.storage.setAlarm(Math.min(...deadlines));
 	}
@@ -109,15 +112,18 @@ export class GameRoom extends DurableObject<Env> {
 		// Reaping. Re-check who is actually connected before deleting anything: if someone
 		// came back, this clears or pushes back the deadline instead.
 		this.updateReaper(room);
-		if (room.reap && now >= room.reap.at) return this.reap();
+		if (room.reap && now >= room.reap.at) return this.reap("Room closed after being abandoned");
+
+		// Finished matches don't wait for players to leave.
+		if (room.expiresAt !== undefined && now >= room.expiresAt) return this.reap("Room closed after the match ended");
 
 		this.persist(room); // re-arms the alarm for whatever is due next
 		if (turnExpired) this.broadcastState(room);
 	}
 
-	private async reap(): Promise<void> {
+	private async reap(message: string): Promise<void> {
 		for (const ws of this.ctx.getWebSockets()) {
-			this.sendError(ws, "ROOM_EXPIRED", "Room closed after being abandoned");
+			this.sendError(ws, "ROOM_EXPIRED", message);
 			try {
 				ws.close(CloseCode.Expired, "Room expired");
 			} catch {}

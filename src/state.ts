@@ -37,4 +37,9 @@ export interface RoomState {
 	winner: Seat | null;
 	lastThrow: ThrowRecord | null;
 	reap: ReapTimer | null; // null while both players are connected
+	/**
+	 * Finished matches are deleted at this time even if both players stay connected. Set once,
+	 * when the match ends, so reconnecting can't push it back.
+	 */
+	expiresAt?: number;
 }

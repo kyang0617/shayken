@@ -19,6 +19,7 @@
   "vars": {
     "REAP_EMPTY_SECONDS": "60", // no players connected (grace period so a refresh doesn't kill the room)
     "REAP_SOLO_SECONDS": "600", // only one player connected
+    "REAP_FINISHED_SECONDS": "300", // after the match ends, even if both players stay
     "TURN_SECONDS": "60" // turn timer; the turn auto-ends when it runs out
   },
   "durable_objects": {
