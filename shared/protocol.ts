@@ -23,7 +23,12 @@ export type ClientMessage =
 	| { type: "playCard"; iid: string }
 	/** End your turn. With `throw: true`, your brew is thrown at the opponent first. */
 	| { type: "endTurn"; throw?: boolean }
-	| { type: "concede" };
+	| { type: "concede" }
+	/**
+	 * Leave the room. While waiting for an opponent this cancels (deletes) the room; during a
+	 * match it counts as conceding. The server then closes your socket with CloseCode.Left.
+	 */
+	| { type: "leave" };
 
 // ---- Server -> Client (WebSocket) ----
 
@@ -93,4 +98,6 @@ export const CloseCode = {
 	JoinFailed: 4002,
 	/** The room was deleted after being abandoned; see the preceding error message. */
 	Expired: 4003,
+	/** You sent `leave`; the server has let you go. */
+	Left: 4004,
 } as const;

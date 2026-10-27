@@ -176,6 +176,8 @@ export class GameRoom extends DurableObject<Env> {
 				return this.handleAction(ws, (room, seat) => endTurn(room, seat, this.turnMs, Date.now(), msg.throw === true));
 			case "concede":
 				return this.handleAction(ws, (room, seat) => concede(room, seat));
+			case "leave":
+				return this.handleLeave(ws);
 		}
 	}
 
@@ -239,6 +241,27 @@ export class GameRoom extends DurableObject<Env> {
 		const result = action(room, seat);
 		if (!result.ok) return this.sendError(ws, result.code, result.message);
 		this.persist(room);
+		this.broadcastState(room);
+	}
+
+	/**
+	 * Leaving depends on the match state:
+	 * - waiting: nobody else holds a seat, so the room has no reason to exist. Delete it now
+	 *   rather than waiting for the reaper, so the code stops accepting joins immediately.
+	 * - playing: counts as conceding, so the opponent isn't left waiting on an empty seat.
+	 * - finished: nothing to change; the post-match expiry cleans up.
+	 */
+	private async handleLeave(ws: WebSocket): Promise<void> {
+		const { seat } = getAttachment(ws);
+		if (seat === null) return this.sendError(ws, "NOT_JOINED", "Send join first");
+		const room = this.load();
+		if (!room) return this.sendError(ws, "ROOM_NOT_FOUND", "No room with that code");
+
+		ws.close(CloseCode.Left, "Left the room");
+		if (room.status === "waiting") return this.reap("The room was cancelled");
+
+		if (room.status === "playing") concede(room, seat);
+		this.persist(room); // the leaver no longer counts as connected
 		this.broadcastState(room);
 	}
 
@@ -344,7 +367,8 @@ function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | null {
 			if (msg.throw !== undefined && typeof msg.throw !== "boolean") return null;
 			return { type: "endTurn", throw: msg.throw };
 		case "concede":
-			return { type: "concede" };
+		case "leave":
+			return { type: msg.type };
 		default:
 			return null;
 	}
