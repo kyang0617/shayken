@@ -43,6 +43,13 @@ without asking. Card definitions are placeholders until the design is settled.
   an `alarm()` handler) — never `setTimeout`/`setInterval`. A pending JS timer keeps the
   object awake and billed; an alarm lets it hibernate and wakes it when due. A DO has one
   alarm at a time, so store the deadline(s) in state and set the alarm to the earliest one.
+- Room reaping already uses the alarm (`room.reap`, `updateReaper`, `alarm()` in
+  `src/game-room.ts`): 0 joined players connected → deleted after `REAP_EMPTY_SECONDS` (60s),
+  1 connected → after `REAP_SOLO_SECONDS` (600s). Any new timer (e.g. the turn timer) must
+  share that one alarm — set it to the earliest deadline and have `alarm()` dispatch — rather
+  than calling `setAlarm` independently, or the two will overwrite each other.
+- After any event that can change who is connected (join, close), call `updateReaper(room)`
+  before saving.
 
 ## Layout
 
@@ -55,7 +62,8 @@ without asking. Card definitions are placeholders until the design is settled.
 
 - `npm run dev` — build the client and run `wrangler dev` (http://localhost:8787)
 - `npm run check` — typecheck server, shared and client code
-- `npm run test:e2e` — protocol test against a running `npm run dev`
+- `npm run test:e2e` — protocol test against a running `npm run dev` (or pass a live URL)
+- `npm run dev:reap` + `npm run test:reap` — reaping test against a dev server with 2s/4s timings
 - `npx wrangler types` — regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc`
 
 ## Git workflow

@@ -1,24 +1,6 @@
 // End-to-end protocol test: plays two (and a few hostile) clients against a running dev
 // server. Start `npm run dev` first, then `npm run test:e2e [base-url]`.
-const BASE = process.argv[2] ?? "http://localhost:8787";
-const WS = BASE.replace("http", "ws");
-let failures = 0;
-const check = (cond, label) => { console.log(`${cond ? "PASS" : "FAIL"} ${label}`); if (!cond) failures++; };
-
-function client(code) {
-  const ws = new WebSocket(`${WS}/api/rooms/${code}/ws`);
-  const c = { ws, msgs: [], closed: null, waiters: [] };
-  ws.onmessage = (e) => { c.msgs.push(JSON.parse(e.data)); c.waiters.forEach((w) => w()); };
-  ws.onclose = (e) => { c.closed = e.code; c.waiters.forEach((w) => w()); };
-  c.open = new Promise((r) => (ws.onopen = r));
-  c.until = (pred, ms = 3000) => new Promise((res, rej) => {
-    const t = setTimeout(() => rej(new Error("timeout")), ms);
-    const w = () => { if (pred(c)) { clearTimeout(t); res(); } };
-    c.waiters.push(w); w();
-  });
-  c.last = (type) => [...c.msgs].reverse().find((m) => m.type === type);
-  return c;
-}
+import { BASE, check, client, finish } from "./helpers.mjs";
 
 const html = await fetch(BASE + "/").then((r) => r.text());
 check(html.includes("Shayken"), "index.html served");
@@ -73,5 +55,4 @@ check(ghost.last("error")?.code === "ROOM_NOT_FOUND", "unknown room rejected");
 check((await fetch(BASE + "/api/rooms/bad!/ws")).status === 400, "invalid code format -> 400");
 
 b.ws.close();
-console.log(failures ? `${failures} FAILED` : "ALL PASSED");
-process.exit(failures ? 1 : 0);
+finish();

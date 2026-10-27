@@ -14,6 +14,12 @@
     "command": "npm run build:client",
     "watch_dir": ["client", "shared"]
   },
+  // Room reaping timings. Override locally for tests, e.g.
+  // `wrangler dev --var REAP_EMPTY_SECONDS:2 --var REAP_SOLO_SECONDS:4`.
+  "vars": {
+    "REAP_EMPTY_SECONDS": "60", // no players connected (grace period so a refresh doesn't kill the room)
+    "REAP_SOLO_SECONDS": "600" // only one player connected
+  },
   "durable_objects": {
     "bindings": [
       {
