@@ -22,11 +22,12 @@
 			<section id="game" hidden>
 				<p>Room <strong id="room-code"></strong> · You are <strong id="seat"></strong></p>
 				<p id="turn"></p>
+				<p id="last-throw"></p>
 
 				<div class="panel">
 					<h2>Opponent</h2>
 					<p id="opp-stats"></p>
-					<h3>Brew</h3>
+					<h3>Brew <span id="opp-brew-dmg"></span></h3>
 					<div id="opp-brew" class="row small"></div>
 					<h3>Powers</h3>
 					<div id="opp-powers" class="row small"></div>
@@ -35,14 +36,15 @@
 				<div class="panel">
 					<h2>You</h2>
 					<p id="my-stats"></p>
-					<h3>Brew</h3>
+					<h3>Brew <span id="my-brew-dmg"></span></h3>
 					<div id="my-brew" class="row small"></div>
 					<h3>Powers</h3>
 					<div id="my-powers" class="row small"></div>
 					<h3>Hand</h3>
 					<div id="hand" class="row"></div>
 					<div class="actions">
-						<button id="end-turn-btn">End turn</button>
+						<button id="end-turn-btn">End turn (hold brew)</button>
+						<button id="throw-btn">Throw &amp; end turn</button>
 						<button id="concede-btn">Concede</button>
 					</div>
 				</div>

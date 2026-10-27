@@ -21,6 +21,12 @@ main {
 	font-weight: bold;
 }
 
+#last-throw:not(:empty) {
+	padding: 0.4rem 0.75rem;
+	border-left: 4px solid var(--attack);
+	background: color-mix(in srgb, var(--attack) 10%, Canvas);
+}
+
 .panel {
 	border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
 	border-radius: 10px;
