@@ -18,7 +18,7 @@ function newRoom(): RoomState {
 	return {
 		code: "TEST01", createdAt: 0, status: "waiting",
 		players: [newPlayer("tok0"), newPlayer("tok1")],
-		turn: null, winner: null, reap: null,
+		turn: null, winner: null, lastThrow: null, reap: null,
 	};
 }
 
