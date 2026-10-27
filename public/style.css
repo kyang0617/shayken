@@ -183,3 +183,6 @@ main {
 .result-card .actions {
 	justify-content: center;
 }
+.result-card #result-brew:empty {
+	display: none;
+}
