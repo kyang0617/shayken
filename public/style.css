@@ -186,3 +186,7 @@ main {
 .result-card #result-brew:empty {
 	display: none;
 }
+#result-closed {
+	font-style: italic;
+	opacity: 0.7;
+}

@@ -62,16 +62,20 @@ function connect(code: string): void {
 				break;
 			case "error":
 				if (msg.code === "BAD_TOKEN" || msg.code === "ROOM_EXPIRED") sessionStorage.removeItem(tokenKey(code));
-				setStatus(`Error: ${msg.message}`);
+				// Expiry isn't the player's mistake, so don't label it an error.
+				setStatus(msg.code === "ROOM_EXPIRED" ? msg.message : `Error: ${msg.message}`);
 				break;
 		}
 	});
 
 	ws.addEventListener("close", (e) => {
 		if (socket !== ws) return; // we closed it ourselves to switch rooms
+		// A finished room expiring while the result screen is up: keep the screen, just say the
+		// room is gone. Only "Back to lobby" makes sense after that.
+		if (e.code === CloseCode.Expired && lastView?.status === "finished") return showRoomClosed();
 		if (e.code === CloseCode.Replaced) setStatus("This seat was opened in another tab.");
-		else if (e.code === CloseCode.Expired) setStatus("Room closed after being abandoned. Create a new one.");
-		else if (e.code !== CloseCode.JoinFailed) setStatus("Disconnected. Refresh to reconnect.");
+		else if (e.code !== CloseCode.JoinFailed && e.code !== CloseCode.Expired) setStatus("Disconnected. Refresh to reconnect.");
+		// (For JoinFailed/Expired the server's error message is already in the status line.)
 		if (e.code === CloseCode.JoinFailed || e.code === CloseCode.Expired) showLobby();
 	});
 }
@@ -136,6 +140,7 @@ function renderResult(view: PlayerView): void {
 	if (view.status !== "finished" || !view.opponent) {
 		overlay.hidden = true;
 		resultDismissed = false;
+		setRoomClosed(false);
 		return;
 	}
 	const me = view.you;
@@ -157,6 +162,19 @@ function renderResult(view: PlayerView): void {
 	overlay.hidden = resultDismissed;
 }
 
+function showRoomClosed(): void {
+	socket = null;
+	setRoomClosed(true);
+	resultDismissed = false;
+	$("result").hidden = false;
+}
+
+/** Closed room: show the notice and drop "View board", whose board can no longer update. */
+function setRoomClosed(closed: boolean): void {
+	$("result-closed").hidden = !closed;
+	$("result-close").hidden = closed;
+}
+
 $("result-close").addEventListener("click", () => {
 	resultDismissed = true;
 	$("result").hidden = true;
@@ -172,6 +190,7 @@ $("result-lobby").addEventListener("click", () => {
 	lastView = null;
 	$("result").hidden = true;
 	resultDismissed = false;
+	setRoomClosed(false);
 	showLobby();
 	setStatus("");
 });
