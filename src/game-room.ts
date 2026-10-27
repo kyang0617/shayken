@@ -1,30 +1,16 @@
 import { DurableObject } from "cloudflare:workers";
-import type { CardInstance } from "../shared/cards";
-import { STARTER_DECK, STARTING_HAND_SIZE } from "../shared/decks";
-import { CloseCode, type ClientMessage, type ErrorCode, type PlayerView, type Seat, type ServerMessage } from "../shared/protocol";
-import { randomToken, shuffle } from "./random";
-
-// The full, secret state of one match. Only this object ever sees all of it.
-interface PlayerState {
-	token: string;
-	deck: CardInstance[]; // order matters and is hidden from everyone
-	hand: CardInstance[];
-}
-
-interface RoomState {
-	code: string;
-	createdAt: number;
-	status: "waiting" | "dealt";
-	players: [PlayerState | null, PlayerState | null]; // index = seat
-	reap: ReapTimer | null; // null while both players are connected
-}
-
-// Why the room is counting down to deletion, and when. We keep the reason so that events
-// that don't change the connected count (e.g. a duplicated tab) don't restart the clock.
-interface ReapTimer {
-	reason: "empty" | "solo";
-	at: number; // epoch ms
-}
+import {
+	CloseCode,
+	type ClientMessage,
+	type ErrorCode,
+	type PlayerView,
+	type PublicPlayerView,
+	type Seat,
+	type ServerMessage,
+} from "../shared/protocol";
+import { randomToken } from "./random";
+import { concede, endTurn, newPlayer, otherSeat, playCard, startMatch, type ActionResult } from "./rules";
+import type { PlayerState, RoomState } from "./state";
 
 // What we attach to each WebSocket. Attachments survive hibernation; instance fields don't.
 interface SocketAttachment {
@@ -50,8 +36,18 @@ export class GameRoom extends DurableObject<Env> {
 		return this.ctx.storage.kv.get<RoomState>(ROOM_KEY);
 	}
 
-	private save(room: RoomState): void {
+	/**
+	 * Save after every change. This also refreshes the reap deadline and re-arms the alarm, so
+	 * no handler can forget to — every state change goes through here.
+	 */
+	private persist(room: RoomState): void {
+		this.updateReaper(room);
+		this.syncAlarm(room);
 		this.ctx.storage.kv.put(ROOM_KEY, room);
+	}
+
+	private get turnMs(): number {
+		return Number(this.env.TURN_SECONDS) * 1000;
 	}
 
 	// ---- RPC from the Worker ----
@@ -63,29 +59,34 @@ export class GameRoom extends DurableObject<Env> {
 	 */
 	async create(code: string): Promise<boolean> {
 		if (this.load()) return false;
-		const room: RoomState = { code, createdAt: Date.now(), status: "waiting", players: [null, null], reap: null };
-		// Nobody is connected yet, so this starts the "empty" timer: a room that's created but
-		// never joined gets cleaned up too.
-		this.updateReaper(room);
-		this.save(room);
+		const room: RoomState = {
+			code, createdAt: Date.now(), status: "waiting", players: [null, null], turn: null, winner: null, reap: null,
+		};
+		// Nobody is connected yet, so this starts the "empty" reap timer: a room that's created
+		// but never joined gets cleaned up too.
+		this.persist(room);
 		return true;
 	}
 
-	// ---- Reaping ----
+	// ---- Timers: turn timer + reaping, sharing one alarm ----
 	//
-	// Abandoned rooms are deleted so storage doesn't grow forever. A Durable Object alarm
-	// drives it: the alarm survives hibernation and wakes the object when due, whereas a
-	// setTimeout would keep it awake (and billed) the whole time. A DO has only one alarm, so
-	// `room.reap` is the single deadline and the alarm always mirrors it.
+	// Both timers use a Durable Object alarm: it survives hibernation and wakes the object when
+	// due, whereas a setTimeout would keep it awake (and billed) the whole time. A DO has only
+	// ONE alarm, so the deadlines live in state (`room.turn.endsAt`, `room.reap.at`), the alarm
+	// is set to the earliest, and alarm() checks which one(s) are due.
 
-	/** Recompute the reap deadline. Call after anything that may change who is connected. */
+	private syncAlarm(room: RoomState): void {
+		const deadlines = [room.turn?.endsAt, room.reap?.at].filter((t): t is number => t !== undefined);
+		if (deadlines.length === 0) this.ctx.storage.deleteAlarm();
+		else this.ctx.storage.setAlarm(Math.min(...deadlines));
+	}
+
+	/** Recompute the reap deadline from who is connected right now. */
 	private updateReaper(room: RoomState): void {
 		const connected = this.connectedSeats().size;
 		const reason = connected === 2 ? null : connected === 1 ? "solo" : "empty";
-
 		if (reason === null) {
 			room.reap = null;
-			this.ctx.storage.deleteAlarm();
 			return;
 		}
 		// Only start a new countdown when the situation changes, so e.g. a solo player
@@ -94,18 +95,27 @@ export class GameRoom extends DurableObject<Env> {
 			const seconds = Number(reason === "solo" ? this.env.REAP_SOLO_SECONDS : this.env.REAP_EMPTY_SECONDS);
 			room.reap = { reason, at: Date.now() + seconds * 1000 };
 		}
-		this.ctx.storage.setAlarm(room.reap!.at);
 	}
 
 	async alarm(): Promise<void> {
 		const room = this.load();
-		if (!room?.reap) return;
+		if (!room) return;
+		const now = Date.now();
 
-		// Re-check who is actually connected before deleting anything. If someone came back,
-		// this clears or pushes back the deadline instead (and re-arms the alarm).
+		// Turn timer: the active player ran out of time, so end their turn for them.
+		const turnExpired = !!room.turn && now >= room.turn.endsAt;
+		if (turnExpired) endTurn(room, room.turn!.seat, this.turnMs, now);
+
+		// Reaping. Re-check who is actually connected before deleting anything: if someone
+		// came back, this clears or pushes back the deadline instead.
 		this.updateReaper(room);
-		if (!room.reap || Date.now() < room.reap.at) return this.save(room);
+		if (room.reap && now >= room.reap.at) return this.reap();
 
+		this.persist(room); // re-arms the alarm for whatever is due next
+		if (turnExpired) this.broadcastState(room);
+	}
+
+	private async reap(): Promise<void> {
 		for (const ws of this.ctx.getWebSockets()) {
 			this.sendError(ws, "ROOM_EXPIRED", "Room closed after being abandoned");
 			try {
@@ -154,6 +164,12 @@ export class GameRoom extends DurableObject<Env> {
 		switch (msg.type) {
 			case "join":
 				return this.handleJoin(ws, msg.token);
+			case "playCard":
+				return this.handleAction(ws, (room, seat) => playCard(room, seat, msg.iid));
+			case "endTurn":
+				return this.handleAction(ws, (room, seat) => endTurn(room, seat, this.turnMs, Date.now()));
+			case "concede":
+				return this.handleAction(ws, (room, seat) => concede(room, seat));
 		}
 	}
 
@@ -168,8 +184,7 @@ export class GameRoom extends DurableObject<Env> {
 		// back with their token (until the room is reaped).
 		const room = this.load();
 		if (!room) return;
-		this.updateReaper(room);
-		this.save(room);
+		this.persist(room);
 		this.broadcastState(room);
 	}
 
@@ -192,16 +207,32 @@ export class GameRoom extends DurableObject<Env> {
 			const open = room.players.findIndex((p) => p === null);
 			if (open === -1) return this.rejectJoin(ws, "ROOM_FULL", "Room already has two players");
 			seat = open as Seat;
-			room.players[seat] = { token: randomToken(), deck: [], hand: [] };
+			room.players[seat] = newPlayer(randomToken());
 		}
 
 		ws.serializeAttachment({ seat } satisfies SocketAttachment);
 
-		if (room.status === "waiting" && room.players[0] && room.players[1]) deal(room);
-		this.updateReaper(room); // this socket now counts as connected
-		this.save(room);
+		if (room.status === "waiting" && room.players[0] && room.players[1]) startMatch(room, this.turnMs, Date.now());
+		this.persist(room); // this socket now counts as connected
 
 		this.send(ws, { type: "joined", seat, token: room.players[seat]!.token });
+		this.broadcastState(room);
+	}
+
+	/**
+	 * Every game action follows the same path: identify the sender by their socket (never by
+	 * anything in the message), run the rule, and only if it's legal save and broadcast.
+	 * Rules leave state untouched when they reject, and we don't save in that case anyway.
+	 */
+	private handleAction(ws: WebSocket, action: (room: RoomState, seat: Seat) => ActionResult): void {
+		const { seat } = getAttachment(ws);
+		if (seat === null) return this.sendError(ws, "NOT_JOINED", "Send join first");
+		const room = this.load();
+		if (!room) return this.sendError(ws, "ROOM_NOT_FOUND", "No room with that code");
+
+		const result = action(room, seat);
+		if (!result.ok) return this.sendError(ws, result.code, result.message);
+		this.persist(room);
 		this.broadcastState(room);
 	}
 
@@ -210,15 +241,21 @@ export class GameRoom extends DurableObject<Env> {
 	/** Build what `seat` is allowed to see. This is the only path game state takes to a client. */
 	private viewFor(room: RoomState, seat: Seat): PlayerView {
 		const me = room.players[seat]!;
-		const opp = room.players[seat === 0 ? 1 : 0];
+		const opp = room.players[otherSeat(seat)];
 		return {
 			roomCode: room.code,
 			status: room.status,
-			you: { seat, hand: me.hand, deckCount: me.deck.length },
+			turn: room.turn && {
+				seat: room.turn.seat,
+				number: room.turn.number,
+				msLeft: Math.max(0, room.turn.endsAt - Date.now()),
+			},
+			winner: room.winner,
+			you: { ...publicView(me), seat, hand: me.hand },
 			opponent: opp && {
-				connected: this.socketsForSeat(seat === 0 ? 1 : 0).length > 0,
-				handCount: opp.hand.length,
-				deckCount: opp.deck.length,
+				...publicView(opp),
+				connected: this.socketsForSeat(otherSeat(seat)).length > 0,
+				handCount: opp.hand.length, // count only: the opponent's cards never leave the server
 			},
 		};
 	}
@@ -258,14 +295,16 @@ export class GameRoom extends DurableObject<Env> {
 
 // ---- Pure helpers ----
 
-/** Both seats are filled: give each player a freshly shuffled copy of the deck and a hand. */
-function deal(room: RoomState): void {
-	for (const [seat, player] of room.players.entries()) {
-		const deck = STARTER_DECK.map((cardId, i): CardInstance => ({ iid: `p${seat}-${i}`, cardId }));
-		player!.deck = shuffle(deck);
-		player!.hand = player!.deck.splice(0, STARTING_HAND_SIZE);
-	}
-	room.status = "dealt";
+/** The parts of a player both sides may see. Lists fields explicitly so nothing leaks by accident. */
+function publicView(p: PlayerState): PublicPlayerView {
+	return {
+		health: p.health,
+		essence: p.essence,
+		deckCount: p.deck.length,
+		discardCount: p.discard.length,
+		brew: p.brew,
+		powers: p.powers,
+	};
 }
 
 function getAttachment(ws: WebSocket): SocketAttachment {
@@ -291,6 +330,12 @@ function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | null {
 		case "join":
 			if (msg.token !== undefined && typeof msg.token !== "string") return null;
 			return { type: "join", token: msg.token };
+		case "playCard":
+			if (typeof msg.iid !== "string" || msg.iid.length > 64) return null;
+			return { type: "playCard", iid: msg.iid };
+		case "endTurn":
+		case "concede":
+			return { type: msg.type };
 		default:
 			return null;
 	}
