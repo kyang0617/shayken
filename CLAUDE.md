@@ -4,18 +4,25 @@ A 2-player online card battler, built as a learning project. Browser frontend; b
 Cloudflare Workers + Durable Objects on the **free plan**. Explain key server-side decisions
 when making changes — the owner wants to understand the code, not just have it.
 
-## Game direction (mostly undecided)
+## Game design
 
-- Quick (~10 min) 1v1 matches. Each player starts at 20 health; reduce the opponent to 0 to win.
-- 20-card decks. Turn timer of roughly 45–60s.
-- Theme: drinks/potions. Cards add ingredients (each with an effect) to your current concoction.
-  At the end of each turn you decide whether to throw the potion at the opponent (effect applies
-  now, can disrupt them) or keep brewing toward a stronger potion.
-- One resource to start, gained each turn.
+**Decided** (implemented in `src/rules.ts`, numbers in `shared/rules.ts`):
+- Quick (~10 min) 1v1 matches. 20 health each; reduce the opponent to 0 to win, or they concede.
+- 20-card fixed starter deck (same for both players). First player is a server-side coin flip.
+- Turns have no sub-phases: at turn start you draw 5 and gain 3 essence, then play any cards
+  you can afford, then end your turn (or the 60s timer ends it). Spire-style hand: unplayed
+  cards are discarded at end of turn; when the deck runs out, the discard pile is reshuffled.
+- Essence ("the resource") accumulates: unspent essence carries over, no cap.
+- Card types, inspired by deckbuilder roguelikes (don't copy any specific game's cards):
+  - **attack** — goes into your brew as an ingredient.
+  - **skill** — immediate effect (gain essence, draw), then discarded; may also go into the brew.
+  - **power** — stays active for the rest of the match (per-turn bonuses).
+- Theme: drinks/potions. The brew is the potion you're building. Both brews are fully visible
+  to both players.
 
-**Everything else about the rules is undecided** — card types, tiers, effects, how holding a
-potion is balanced, what the opponent can see. Do not invent or implement game mechanics
-without asking. Card definitions are placeholders until the design is settled.
+**Undecided — do not invent without asking:** what throwing the brew does and when you can
+throw (attacks currently just accumulate in the brew), anything that deals damage, card
+numbers/balance, tiers, deckbuilding. Card definitions are placeholders.
 
 ## Architecture rules (decided — follow these)
 
@@ -25,8 +32,14 @@ without asking. Card definitions are placeholders until the design is settled.
 - Hidden information: the server holds full state and sends each player only their own view
   (own hand; opponent's hand count only; never deck order).
 - All shuffling and randomness happen on the server, using `crypto.getRandomValues`.
-- Cards are data, not code: definitions live in typed data files in `shared/`; a rules engine
-  (later) interprets them.
+- Cards are data, not code: definitions live in `shared/cards.ts` as typed `Effect` lists;
+  `src/rules.ts` interprets them. A new card should need no new code unless it needs a new
+  `Effect` kind.
+- Rules are pure functions over `RoomState` (`src/rules.ts`, unit-tested in `test/unit/`).
+  They return `{ ok: false, code }` without mutating state when an action is illegal.
+  `GameRoom` only does I/O: identify the sender by socket attachment, call the rule,
+  persist, broadcast.
+- Client messages express intent (`playCard { iid }`), never outcomes.
 - Card data and message types live in `shared/` and are imported by both server and client.
 - Players are identified by a secret token issued by the server on join, never by a seat
   number or name sent from the client.
@@ -43,18 +56,19 @@ without asking. Card definitions are placeholders until the design is settled.
   an `alarm()` handler) — never `setTimeout`/`setInterval`. A pending JS timer keeps the
   object awake and billed; an alarm lets it hibernate and wakes it when due. A DO has one
   alarm at a time, so store the deadline(s) in state and set the alarm to the earliest one.
-- Room reaping already uses the alarm (`room.reap`, `updateReaper`, `alarm()` in
-  `src/game-room.ts`): 0 joined players connected → deleted after `REAP_EMPTY_SECONDS` (60s),
-  1 connected → after `REAP_SOLO_SECONDS` (600s). Any new timer (e.g. the turn timer) must
-  share that one alarm — set it to the earliest deadline and have `alarm()` dispatch — rather
-  than calling `setAlarm` independently, or the two will overwrite each other.
-- After any event that can change who is connected (join, close), call `updateReaper(room)`
-  before saving.
+- Two timers share the one alarm: the turn timer (`room.turn.endsAt`, `TURN_SECONDS` = 60)
+  and room reaping (`room.reap.at`; 0 joined players connected → `REAP_EMPTY_SECONDS` = 60,
+  1 connected → `REAP_SOLO_SECONDS` = 600). `syncAlarm` sets the alarm to the earliest
+  deadline; `alarm()` handles whichever are due. A new timer = a new deadline field in state,
+  added to `syncAlarm` and `alarm()`. Never call `setAlarm` anywhere else.
+- Always save through `persist(room)`: it refreshes the reap deadline and re-arms the alarm.
 
 ## Layout
 
-- `src/` — Worker entry (`index.ts`, HTTP routing) and the `GameRoom` Durable Object.
-- `shared/` — card definitions, starter decks, WebSocket protocol types.
+- `src/` — Worker entry (`index.ts`), `GameRoom` Durable Object (`game-room.ts`), rules engine
+  (`rules.ts`), state types (`state.ts`), randomness (`random.ts`).
+- `shared/` — card definitions, starter deck, rule constants, WebSocket protocol types.
+- `test/unit/` — vitest unit tests for the rules; `test/*.mjs` — end-to-end socket tests.
 - `client/` — browser TypeScript, bundled by esbuild into `public/main.js` (not committed).
 - `public/` — static assets served by the same Worker.
 
@@ -62,8 +76,9 @@ without asking. Card definitions are placeholders until the design is settled.
 
 - `npm run dev` — build the client and run `wrangler dev` (http://localhost:8787)
 - `npm run check` — typecheck server, shared and client code
-- `npm run test:e2e` — protocol test against a running `npm run dev` (or pass a live URL)
-- `npm run dev:reap` + `npm run test:reap` — reaping test against a dev server with 2s/4s timings
+- `npm test` — rules unit tests (no server needed)
+- `npm run test:e2e` — protocol + game-flow test against a running `npm run dev` (or pass a live URL)
+- `npm run dev:fast` + `npm run test:timers` — turn-timer and reaping test with 2s/4s/3s timings
 - `npx wrangler types` — regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc`
 
 ## Git workflow
@@ -74,8 +89,8 @@ without asking. Card definitions are placeholders until the design is settled.
 
 ## Roadmap
 
-- **Stage 1 (current):** create room → room code; two players join by code over WebSocket;
-  secret player tokens; server shuffles fixed starter decks and deals hands; each screen shows
-  own hand and opponent's card count. No turns, combat, or rules.
-- **Later:** turn state machine, the potion/throw mechanic, card effects, turn timer,
-  deckbuilding, lobby, reconnect handling.
+- **Done:** rooms by code, secret tokens, per-player views, hibernation, room reaping;
+  turn loop (draw / play / end turn), essence, attack/skill/power cards, brew and powers,
+  turn timer, concede.
+- **Next:** design and implement throwing the brew (and therefore damage).
+- **Later:** client auto-reconnect, deckbuilding, more cards/tiers, lobby, auto-deploy.

@@ -1,6 +1,6 @@
-// End-to-end protocol test: plays two (and a few hostile) clients against a running dev
-// server. Start `npm run dev` first, then `npm run test:e2e [base-url]`.
-import { BASE, check, client, finish } from "./helpers.mjs";
+// End-to-end protocol + game-flow test: plays two (and a few hostile) clients against a
+// running dev server. Start `npm run dev` first, then `npm run test:e2e [base-url]`.
+import { BASE, check, client, createRoom, finish, join } from "./helpers.mjs";
 
 const html = await fetch(BASE + "/").then((r) => r.text());
 check(html.includes("Shayken"), "index.html served");
@@ -15,16 +15,16 @@ check(a.last("joined").seat === 0, "A gets seat 0");
 check(a.last("state").view.status === "waiting" && a.last("state").view.opponent === null, "A sees waiting, no opponent");
 
 const b = client(code.toLowerCase()); await b.open; b.ws.send(JSON.stringify({ type: "join" }));
-await b.until((c) => c.last("state")?.view.status === "dealt");
-await a.until((c) => c.last("state")?.view.status === "dealt");
+await b.until((c) => c.last("state")?.view.status === "playing");
+await a.until((c) => c.last("state")?.view.status === "playing");
 const av = a.last("state").view, bv = b.last("state").view;
 check(b.last("joined").seat === 1, "B gets seat 1 (lowercase code accepted)");
-check(av.you.hand.length === 5 && av.you.deckCount === 15, "A has 5 in hand, 15 in deck");
-check(av.opponent.handCount === 5 && av.opponent.connected, "A sees opponent: 5 cards, connected");
+check(av.opponent.connected && bv.opponent.connected, "both see each other connected");
 check(a.last("joined").token !== b.last("joined").token, "tokens differ");
 const aRaw = JSON.stringify(a.msgs);
-check(!aRaw.includes("p1-") && !aRaw.includes(b.last("joined").token), "A never receives B's cards or token");
-check(!("deck" in av.you) && !("hand" in av.opponent), "no deck contents / opponent hand in view");
+const bHand = bv.you.hand.map((c) => c.iid);
+check(!bHand.some((iid) => aRaw.includes(`"${iid}"`)) && !aRaw.includes(b.last("joined").token), "A never receives B's hand or token");
+check(!("deck" in av.you) && !("hand" in av.opponent) && av.opponent.handCount === bHand.length, "no deck contents; opponent hand is a count only");
 
 const c3 = client(code); await c3.open; c3.ws.send(JSON.stringify({ type: "join" }));
 await c3.until((c) => c.closed !== null);
@@ -55,4 +55,55 @@ check(ghost.last("error")?.code === "ROOM_NOT_FOUND", "unknown room rejected");
 check((await fetch(BASE + "/api/rooms/bad!/ws")).status === 400, "invalid code format -> 400");
 
 b.ws.close();
+
+// ---- Game flow: a fresh room, played over real sockets ----
+
+/** Send a message and wait for the next state (or error) the sender receives. */
+async function act(c, msg, ms = 3000) {
+  const before = c.msgs.length;
+  c.ws.send(JSON.stringify(msg));
+  await c.until((c) => c.msgs.slice(before).some((m) => m.type === "state" || m.type === "error"), ms);
+  return c.msgs.slice(before).find((m) => m.type === "state" || m.type === "error");
+}
+const view = (c) => c.last("state").view;
+
+const g = await createRoom();
+const p0 = await join(g);
+const p1 = await join(g);
+await p0.until((c) => view(c).status === "playing");
+await p1.until((c) => view(c).status === "playing");
+const first = view(p0).turn.seat;
+const active = first === 0 ? p0 : p1, idle = first === 0 ? p1 : p0;
+
+check(view(active).turn.number === 1 && view(active).turn.msLeft > 0, "match starts on turn 1 with a running timer");
+check(view(active).you.hand.length === 5 && view(active).you.essence === 3, "first player drew 5 and has 3 essence");
+check(view(idle).you.hand.length === 0 && view(idle).you.health === 20, "other player waits with no hand, 20 health");
+
+const someIid = view(active).you.hand[0].iid;
+check((await act(idle, { type: "endTurn" })).code === "NOT_YOUR_TURN", "inactive player can't end the turn");
+check((await act(idle, { type: "playCard", iid: someIid })).code === "NOT_YOUR_TURN", "inactive player can't play cards");
+check((await act(active, { type: "playCard", iid: "p9-99" })).code === "CARD_NOT_IN_HAND", "can't play a card you don't hold");
+check((await act(active, { type: "playCard", iid: 7 })).code === "BAD_MESSAGE", "playCard with a non-string iid is rejected");
+
+// Every starter card costs <= 3, so the first card is always affordable on turn 1.
+const played = await act(active, { type: "playCard", iid: someIid });
+check(played.type === "state" && !played.view.you.hand.some((c) => c.iid === someIid), "playing a card removes it from hand");
+check((await act(active, { type: "playCard", iid: someIid })).code === "CARD_NOT_IN_HAND", "can't play the same card twice");
+await idle.until((c) => {
+  const o = view(c).opponent;
+  return o.brew.some((x) => x.iid === someIid) || o.powers.some((x) => x.iid === someIid) || o.discardCount > 0;
+});
+check(true, "opponent sees the played card land in brew, powers or discard");
+
+const ended = await act(active, { type: "endTurn" });
+check(ended.view.turn.seat !== first && ended.view.turn.number === 2 && ended.view.you.hand.length === 0, "end turn passes play and discards the hand");
+await idle.until((c) => view(c).turn.seat !== first);
+check(view(idle).you.hand.length >= 5 && view(idle).you.essence === 3, "second player drew and gained essence");
+
+const conceded = await act(active, { type: "concede" });
+check(conceded.view.status === "finished" && conceded.view.winner === view(idle).you.seat, "conceding (even off-turn) ends the match");
+await idle.until((c) => view(c).status === "finished");
+check((await act(idle, { type: "endTurn" })).code === "NOT_PLAYING", "no actions after the match ends");
+p0.ws.close(); p1.ws.close();
+
 finish();

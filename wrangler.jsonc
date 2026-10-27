@@ -14,11 +14,12 @@
     "command": "npm run build:client",
     "watch_dir": ["client", "shared"]
   },
-  // Room reaping timings. Override locally for tests, e.g.
-  // `wrangler dev --var REAP_EMPTY_SECONDS:2 --var REAP_SOLO_SECONDS:4`.
+  // Timer lengths. Override locally for tests (see `npm run dev:fast`), e.g.
+  // `wrangler dev --var TURN_SECONDS:3`.
   "vars": {
     "REAP_EMPTY_SECONDS": "60", // no players connected (grace period so a refresh doesn't kill the room)
-    "REAP_SOLO_SECONDS": "600" // only one player connected
+    "REAP_SOLO_SECONDS": "600", // only one player connected
+    "TURN_SECONDS": "60" // turn timer; the turn auto-ends when it runs out
   },
   "durable_objects": {
     "bindings": [

@@ -1,10 +1,13 @@
 :root {
 	color-scheme: light dark;
 	font-family: system-ui, sans-serif;
+	--attack: #c4513a;
+	--skill: #3a7bd5;
+	--power: #8a5cc4;
 }
 
 main {
-	max-width: 900px;
+	max-width: 960px;
 	margin: 2rem auto;
 	padding: 0 1rem;
 }
@@ -14,20 +17,65 @@ main {
 	letter-spacing: 0.15em;
 }
 
-#hand {
+#turn {
+	font-weight: bold;
+}
+
+.panel {
+	border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+	border-radius: 10px;
+	padding: 0.5rem 1rem 1rem;
+	margin-bottom: 1rem;
+}
+
+.panel h3 {
+	font-size: 0.85rem;
+	margin: 0.75rem 0 0.4rem;
+	opacity: 0.7;
+}
+
+.row {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 0.75rem;
+	min-height: 1.5rem;
 }
 
 .card {
+	--color: var(--skill);
 	position: relative;
 	width: 130px;
-	min-height: 170px;
+	min-height: 150px;
 	padding: 0.75rem;
-	border: 2px solid #7a5cc4;
+	border: 2px solid var(--color);
 	border-radius: 10px;
-	background: color-mix(in srgb, #7a5cc4 12%, Canvas);
+	background: color-mix(in srgb, var(--color) 12%, Canvas);
+	opacity: 0.55;
+}
+
+.card.attack { --color: var(--attack); }
+.card.skill { --color: var(--skill); }
+.card.power { --color: var(--power); }
+
+/* Cards in brew/powers areas are just information, so show them small and fully opaque. */
+.row.small .card {
+	width: 90px;
+	min-height: 0;
+	padding: 0.4rem;
+	font-size: 0.8rem;
+	opacity: 1;
+}
+.row.small .card .text,
+.row.small .card .cost {
+	display: none;
+}
+
+.card.playable {
+	opacity: 1;
+	cursor: pointer;
+}
+.card.playable:hover {
+	transform: translateY(-4px);
 }
 
 .card .cost {
@@ -37,11 +85,18 @@ main {
 	width: 28px;
 	height: 28px;
 	border-radius: 50%;
-	background: #3a7bd5;
+	background: var(--color);
 	color: white;
 	display: grid;
 	place-items: center;
 	font-weight: bold;
+}
+
+.card .type {
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--color);
 }
 
 .card .name {
@@ -52,6 +107,12 @@ main {
 .card .text {
 	font-size: 0.85rem;
 	opacity: 0.8;
+}
+
+.actions {
+	margin-top: 1rem;
+	display: flex;
+	gap: 0.5rem;
 }
 
 #status {
