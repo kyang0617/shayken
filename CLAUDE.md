@@ -67,9 +67,10 @@ definitions and numbers are placeholders.
   an `alarm()` handler) — never `setTimeout`/`setInterval`. A pending JS timer keeps the
   object awake and billed; an alarm lets it hibernate and wakes it when due. A DO has one
   alarm at a time, so store the deadline(s) in state and set the alarm to the earliest one.
-- Two timers share the one alarm: the turn timer (`room.turn.endsAt`, `TURN_SECONDS` = 60)
-  and room reaping (`room.reap.at`; 0 joined players connected → `REAP_EMPTY_SECONDS` = 60,
-  1 connected → `REAP_SOLO_SECONDS` = 600). `syncAlarm` sets the alarm to the earliest
+- Three deadlines share the one alarm: the turn timer (`room.turn.endsAt`, `TURN_SECONDS` = 60),
+  room reaping (`room.reap.at`; 0 joined players connected → `REAP_EMPTY_SECONDS` = 60,
+  1 connected → `REAP_SOLO_SECONDS` = 600), and post-match expiry (`room.expiresAt`, set once
+  in `persist()` when the match finishes → `REAP_FINISHED_SECONDS` = 300, even if both stay). `syncAlarm` sets the alarm to the earliest
   deadline; `alarm()` handles whichever are due. A new timer = a new deadline field in state,
   added to `syncAlarm` and `alarm()`. Never call `setAlarm` anywhere else.
 - Always save through `persist(room)`: it refreshes the reap deadline and re-arms the alarm.
@@ -89,7 +90,7 @@ definitions and numbers are placeholders.
 - `npm run check` — typecheck server, shared and client code
 - `npm test` — rules unit tests (no server needed)
 - `npm run test:e2e` — protocol + game-flow test against a running `npm run dev` (or pass a live URL)
-- `npm run dev:fast` + `npm run test:timers` — turn-timer and reaping test with 2s/4s/3s timings
+- `npm run dev:fast` + `npm run test:timers` — turn-timer, reaping and post-match expiry test with short timings
 - `npx wrangler types` — regenerate `worker-configuration.d.ts` after editing `wrangler.jsonc`
 
 ## Git workflow
