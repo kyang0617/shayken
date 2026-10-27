@@ -4,29 +4,32 @@
 import { CARDS, type CardDef, type CardInstance } from "./cards";
 
 /**
- * (sum of `damage` + sum of `damagePerIngredient` × brew size) × product of `multiplyDamage`.
- * Additive parts are summed before multipliers apply, so the order ingredients were added in
- * never matters. Every card in the brew counts toward its size, including ones with no
- * throw effect.
+ * Ingredients resolve one at a time, in the order they were added (brew[0] first), against
+ * a running total. So order matters:
+ * - `damage`: adds to the total.
+ * - `damagePerIngredient`: adds amount × this ingredient's position (1-based), i.e. per
+ *   ingredient added so far, itself included. Worth more the later it's added.
+ * - `multiplyDamage`: multiplies the total so far. Ingredients added after it aren't affected.
+ * Example: Fire Salt, Nightshade, Philosopher's Salt = (2 + 3) × 2 = 10, but
+ *          Philosopher's Salt, Fire Salt, Nightshade = 0 × 2 + 2 + 3 = 5.
  */
 export function brewDamage(brew: readonly CardInstance[]): number {
-	let base = 0;
-	let multiplier = 1;
-	for (const card of brew) {
+	let total = 0;
+	brew.forEach((card, i) => {
 		const def: CardDef = CARDS[card.cardId];
 		for (const effect of def.onThrow ?? []) {
 			switch (effect.kind) {
 				case "damage":
-					base += effect.amount;
+					total += effect.amount;
 					break;
 				case "damagePerIngredient":
-					base += effect.amount * brew.length;
+					total += effect.amount * (i + 1);
 					break;
 				case "multiplyDamage":
-					multiplier *= effect.factor;
+					total *= effect.factor;
 					break;
 			}
 		}
-	}
-	return base * multiplier;
+	});
+	return total;
 }

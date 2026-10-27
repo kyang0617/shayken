@@ -23,9 +23,11 @@ when making changes — the owner wants to understand the code, not just have it
   an empty brew is rejected. A turn that times out holds the brew. Each ingredient's `onThrow`
   effects resolve; the brew then goes to the discard pile (so it cycles back into the deck).
   Damage reduces the opponent's health; at 0 the thrower wins.
-- **Throw damage** = (sum of `damage` + sum of `damagePerIngredient` × brew size) × product of
-  `multiplyDamage`. One implementation, `shared/brew.ts` `brewDamage`, used by the server to
-  resolve and by the client to preview — never reimplement it.
+- **Throw damage: order matters.** Ingredients resolve in the order they were added, against a
+  running total: `damage` adds; `damagePerIngredient` adds amount × the ingredient's 1-based
+  position; `multiplyDamage` multiplies the total so far (later ingredients aren't affected).
+  One implementation, `shared/brew.ts` `brewDamage`, used by the server to resolve and by the
+  client to preview — never reimplement it. Brew arrays must stay in insertion order.
 - **Holding a brew is rewarded only by catalyst cards** (e.g. Distillate: +1 per ingredient;
   Philosopher's Salt: ×2), not by a built-in size bonus.
 

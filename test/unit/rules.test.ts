@@ -223,16 +223,26 @@ describe("brewDamage", () => {
 		expect(brewDamage(brew("fire_salt", "nightshade", "wyrm_bile"))).toBe(2 + 3 + 5);
 	});
 
-	it("counts ingredients with no throw effect toward size but adds no damage", () => {
+	it("counts ingredients with no throw effect toward position but adds no damage", () => {
 		expect(brewDamage(brew("troll_moss"))).toBe(0);
-		expect(brewDamage(brew("troll_moss", "quicksilver", "distillate"))).toBe(3); // +1 x 3 ingredients
+		expect(brewDamage(brew("troll_moss", "quicksilver", "distillate"))).toBe(3); // 3rd ingredient: +1 x 3
 	});
 
-	it("applies multipliers after all additive damage, regardless of order", () => {
-		const a = brewDamage(brew("philosophers_salt", "fire_salt", "distillate"));
-		const b = brewDamage(brew("fire_salt", "distillate", "philosophers_salt"));
-		expect(a).toBe((2 + 3) * 2);
-		expect(b).toBe(a);
+	it("multiplier only doubles what was added before it", () => {
+		expect(brewDamage(brew("fire_salt", "nightshade", "philosophers_salt"))).toBe((2 + 3) * 2);
+		expect(brewDamage(brew("philosophers_salt", "fire_salt", "nightshade"))).toBe(0 * 2 + 2 + 3);
+		expect(brewDamage(brew("fire_salt", "philosophers_salt", "nightshade"))).toBe(2 * 2 + 3);
+	});
+
+	it("per-ingredient catalyst is worth more the later it's added", () => {
+		expect(brewDamage(brew("distillate", "fire_salt", "fire_salt"))).toBe(1 + 2 + 2);
+		expect(brewDamage(brew("fire_salt", "fire_salt", "distillate"))).toBe(2 + 2 + 3);
+	});
+
+	it("combines catalysts in order", () => {
+		// (2 + 1*2) * 2 = 8  vs  2 * 2 + 1*3 = 7
+		expect(brewDamage(brew("fire_salt", "distillate", "philosophers_salt"))).toBe(8);
+		expect(brewDamage(brew("fire_salt", "philosophers_salt", "distillate"))).toBe(7);
 	});
 
 	it("stacks multiple multipliers", () => {

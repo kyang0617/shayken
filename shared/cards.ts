@@ -22,10 +22,9 @@ export type Effect =
 	| { kind: "drawPerTurn"; amount: number };
 
 /**
- * What an ingredient contributes when the brew is thrown. A thrown brew deals
- *   (sum of `damage` + sum of `damagePerIngredient` × brew size) × product of `multiplyDamage`
- * — see brewDamage in shared/brew.ts. The last two are "catalysts": they reward holding a
- * bigger brew instead of throwing every turn.
+ * What an ingredient contributes when the brew is thrown. Ingredients resolve in the order
+ * they were added, against a running total — see brewDamage in shared/brew.ts. The last two
+ * are "catalysts": they reward holding a bigger brew, and adding them late.
  */
 export type ThrowEffect =
 	| { kind: "damage"; amount: number }
@@ -59,8 +58,8 @@ export const CARDS = {
 	phoenix_feather: { id: "phoenix_feather", name: "Phoenix Feather", type: "attack", cost: 3, text: "Thrown: 5 damage.", effects: [brew], onThrow: dmg(5) },
 
 	// ---- Attacks: catalysts (reward a bigger brew) ----
-	distillate: { id: "distillate", name: "Distillate", type: "attack", cost: 2, text: "Thrown: +1 damage per ingredient in the brew.", effects: [brew], onThrow: [{ kind: "damagePerIngredient", amount: 1 }] },
-	philosophers_salt: { id: "philosophers_salt", name: "Philosopher's Salt", type: "attack", cost: 3, text: "Thrown: double the brew's damage.", effects: [brew], onThrow: [{ kind: "multiplyDamage", factor: 2 }] },
+	distillate: { id: "distillate", name: "Distillate", type: "attack", cost: 2, text: "Thrown: +1 damage per ingredient added so far (itself included).", effects: [brew], onThrow: [{ kind: "damagePerIngredient", amount: 1 }] },
+	philosophers_salt: { id: "philosophers_salt", name: "Philosopher's Salt", type: "attack", cost: 3, text: "Thrown: double the damage of everything added before it.", effects: [brew], onThrow: [{ kind: "multiplyDamage", factor: 2 }] },
 
 	// ---- Skills: immediate effects ----
 	bottled_spark: { id: "bottled_spark", name: "Bottled Spark", type: "skill", cost: 0, text: "Gain 1 essence.", effects: [{ kind: "gainEssence", amount: 1 }] },
