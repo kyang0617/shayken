@@ -1,5 +1,6 @@
 // Timer tests (turn timer + room reaping). Needs a dev server with tiny timings:
-//   npm run dev:fast        (REAP_EMPTY_SECONDS=2, REAP_SOLO_SECONDS=4, TURN_SECONDS=3)
+//   npm run dev:fast        (REAP_EMPTY_SECONDS=2, REAP_SOLO_SECONDS=4, TURN_SECONDS=3,
+//                            REAP_FINISHED_SECONDS=3)
 //   npm run test:timers
 // Scenarios run in parallel, each in its own room, so the whole test takes ~8s. Turn and
 // reap deadlines share one Durable Object alarm, so running them together also checks that
@@ -9,6 +10,7 @@ import { check, createRoom, finish, join, sleep } from "./helpers.mjs";
 const EMPTY_MS = 2000;
 const SOLO_MS = 4000;
 const TURN_MS = 3000;
+const FINISHED_MS = 3000;
 const SLACK_MS = 2500; // alarms aren't to-the-millisecond
 
 async function neverJoined() {
@@ -81,5 +83,21 @@ async function turnTimer() {
   a.ws.close(); b.ws.close();
 }
 
-await Promise.all([neverJoined(), soloPlayer(), bothLeave(), refreshWithinGrace(), opponentReturns(), turnTimer()]);
+async function finishedRoomExpires() {
+  const code = await createRoom();
+  const a = await join(code);
+  const b = await join(code);
+  await a.until((c) => c.last("state")?.view.status === "playing");
+  a.ws.send(JSON.stringify({ type: "concede" }));
+  await b.until((c) => c.last("state")?.view.status === "finished");
+  await sleep(FINISHED_MS - 1500);
+  check(a.closed === null && b.closed === null, "finished room stays open briefly with both players connected");
+  await a.until((c) => c.closed !== null, 1500 + SLACK_MS);
+  await b.until((c) => c.closed !== null, 1000);
+  const err = b.last("error");
+  check(a.closed === 4003 && b.closed === 4003 && err?.code === "ROOM_EXPIRED" && /match ended/.test(err.message),
+    "finished room is deleted even though both players stayed connected");
+}
+
+await Promise.all([neverJoined(), soloPlayer(), bothLeave(), refreshWithinGrace(), opponentReturns(), turnTimer(), finishedRoomExpires()]);
 finish();

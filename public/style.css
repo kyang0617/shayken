@@ -144,3 +144,49 @@ main {
 	display: grid;
 	place-items: center;
 }
+
+/* ---- Win / lose screen ---- */
+.overlay {
+	position: fixed;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	padding: 1rem;
+	background: color-mix(in srgb, Canvas 40%, transparent);
+	backdrop-filter: blur(3px);
+}
+.overlay[hidden] {
+	display: none;
+}
+.result-card {
+	--color: #6b6b6b;
+	width: min(420px, 100%);
+	padding: 1.5rem;
+	border: 3px solid var(--color);
+	border-radius: 14px;
+	background: Canvas;
+	text-align: center;
+	box-shadow: 0 10px 40px rgb(0 0 0 / 0.25);
+}
+.overlay.won .result-card {
+	--color: #d4a017;
+}
+.result-card h2 {
+	margin-top: 0;
+	font-size: 2rem;
+	color: var(--color);
+}
+.result-card .row {
+	justify-content: center;
+	margin: 1rem 0;
+}
+.result-card .actions {
+	justify-content: center;
+}
+.result-card #result-brew:empty {
+	display: none;
+}
+#result-closed {
+	font-style: italic;
+	opacity: 0.7;
+}
