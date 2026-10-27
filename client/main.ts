@@ -1,6 +1,7 @@
 // Browser client. Deliberately dumb: it renders whatever view the server sends and forwards
 // player intent. It never decides anything about the game.
 
+import { brewDamage } from "../shared/brew";
 import { CARDS, type CardInstance } from "../shared/cards";
 import { CloseCode, type ClientMessage, type CreateRoomResponse, type PlayerView, type ServerMessage } from "../shared/protocol";
 
@@ -11,6 +12,7 @@ const game = $("game");
 const statusEl = $("status");
 const codeInput = $<HTMLInputElement>("code-input");
 const endTurnBtn = $<HTMLButtonElement>("end-turn-btn");
+const throwBtn = $<HTMLButtonElement>("throw-btn");
 const concedeBtn = $<HTMLButtonElement>("concede-btn");
 
 // sessionStorage is per tab, so two tabs in one browser get different tokens = two players.
@@ -94,16 +96,27 @@ function render(view: PlayerView): void {
 		? `${opp.connected ? "" : "(disconnected) "}❤️ ${opp.health} · 💧 ${opp.essence} essence · ${opp.handCount} in hand · ${opp.deckCount} deck · ${opp.discardCount} discard`
 		: "Waiting for an opponent to join…";
 	$("opp-brew").replaceChildren(...(opp?.brew ?? []).map((c) => renderCard(c)));
+	$("opp-brew-dmg").textContent = opp?.brew.length ? `— ${brewDamage(opp.brew)} damage if thrown` : "";
 	$("opp-powers").replaceChildren(...(opp?.powers ?? []).map((c) => renderCard(c)));
 
 	const me = view.you;
 	$("my-stats").textContent = `❤️ ${me.health} · 💧 ${me.essence} essence · ${me.deckCount} deck · ${me.discardCount} discard`;
 	$("my-brew").replaceChildren(...me.brew.map((c) => renderCard(c)));
+	// Same formula the server uses to resolve the throw (shared/brew.ts), so the preview is exact.
+	const myBrewDamage = brewDamage(me.brew);
+	$("my-brew-dmg").textContent = me.brew.length ? `— ${myBrewDamage} damage if thrown` : "";
 	$("my-powers").replaceChildren(...me.powers.map((c) => renderCard(c)));
 	// Greying out unplayable cards is only a convenience; the server checks every play anyway.
 	$("hand").replaceChildren(...me.hand.map((c) => renderCard(c, myTurn && CARDS[c.cardId].cost <= me.essence)));
 
 	endTurnBtn.disabled = !myTurn;
+	throwBtn.disabled = !myTurn || me.brew.length === 0;
+	throwBtn.textContent = me.brew.length ? `Throw (${myBrewDamage}) & end turn` : "Throw & end turn";
+
+	const t = view.lastThrow;
+	$("last-throw").textContent = t
+		? `${t.seat === me.seat ? "You" : "Opponent"} threw ${t.cards.length} ingredient${t.cards.length === 1 ? "" : "s"} for ${t.damage} damage (turn ${t.turn}).`
+		: "";
 	concedeBtn.disabled = view.status !== "playing";
 	resetConcede();
 
@@ -141,6 +154,7 @@ function updateTurnLabel(): void {
 setInterval(updateTurnLabel, 250);
 
 endTurnBtn.addEventListener("click", () => socket && send(socket, { type: "endTurn" }));
+throwBtn.addEventListener("click", () => socket && send(socket, { type: "endTurn", throw: true }));
 
 // Two clicks to concede, without a blocking confirm() dialog.
 let concedeArmed = false;

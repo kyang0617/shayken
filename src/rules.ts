@@ -4,6 +4,7 @@
 //
 // Every action re-checks legality itself. Never assume the client only sends legal moves.
 
+import { brewDamage } from "../shared/brew";
 import { CARDS, type CardDef, type CardInstance, type Effect } from "../shared/cards";
 import { STARTER_DECK } from "../shared/decks";
 import type { ErrorCode, Seat } from "../shared/protocol";
@@ -58,10 +59,29 @@ export function playCard(room: RoomState, seat: Seat, iid: string): ActionResult
 	return OK;
 }
 
-export function endTurn(room: RoomState, seat: Seat, turnMs: number, now: number): ActionResult {
+/**
+ * End `seat`'s turn, optionally throwing their brew first. A turn that times out ends with
+ * throwBrew = false: the brew is held, because a timeout shouldn't make the choice for you.
+ */
+export function endTurn(room: RoomState, seat: Seat, turnMs: number, now: number, throwBrew = false): ActionResult {
 	const notActive = checkActive(room, seat);
 	if (notActive) return notActive;
 	const player = room.players[seat]!;
+
+	if (throwBrew) {
+		if (player.brew.length === 0) return fail("EMPTY_BREW", "Your brew is empty");
+		const damage = brewDamage(player.brew);
+		const target = room.players[otherSeat(seat)]!;
+		target.health = Math.max(0, target.health - damage);
+		room.lastThrow = { seat, turn: room.turn!.number, cards: player.brew, damage };
+		// Thrown ingredients go to the discard pile, so they come back when the deck reshuffles.
+		player.discard.push(...player.brew);
+		player.brew = [];
+		if (target.health === 0) {
+			finish(room, seat);
+			return OK;
+		}
+	}
 
 	// Unplayed cards are discarded; essence carries over.
 	player.discard.push(...player.hand);
@@ -72,13 +92,17 @@ export function endTurn(room: RoomState, seat: Seat, turnMs: number, now: number
 
 export function concede(room: RoomState, seat: Seat): ActionResult {
 	if (room.status !== "playing") return fail("NOT_PLAYING", "The match is not in progress");
-	room.status = "finished";
-	room.winner = otherSeat(seat);
-	room.turn = null;
+	finish(room, otherSeat(seat));
 	return OK;
 }
 
 // ---- Internals ----
+
+function finish(room: RoomState, winner: Seat): void {
+	room.status = "finished";
+	room.winner = winner;
+	room.turn = null;
+}
 
 function startTurn(room: RoomState, seat: Seat, number: number, turnMs: number, now: number): void {
 	const player = room.players[seat]!;

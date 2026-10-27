@@ -2,7 +2,7 @@
 // filtered PlayerView (see viewFor in game-room.ts).
 
 import type { CardInstance } from "../shared/cards";
-import type { Seat } from "../shared/protocol";
+import type { Seat, ThrowRecord } from "../shared/protocol";
 
 export interface PlayerState {
 	token: string;
@@ -11,7 +11,7 @@ export interface PlayerState {
 	deck: CardInstance[]; // index 0 is the top; order is hidden from everyone
 	hand: CardInstance[];
 	discard: CardInstance[];
-	brew: CardInstance[]; // ingredients added this match (throwing isn't designed yet)
+	brew: CardInstance[]; // ingredients waiting to be thrown; emptied into discard on throw
 	powers: CardInstance[]; // active for the rest of the match
 }
 
@@ -35,5 +35,6 @@ export interface RoomState {
 	players: [PlayerState | null, PlayerState | null]; // index = seat
 	turn: TurnState | null; // non-null exactly while status is "playing"
 	winner: Seat | null;
+	lastThrow: ThrowRecord | null;
 	reap: ReapTimer | null; // null while both players are connected
 }

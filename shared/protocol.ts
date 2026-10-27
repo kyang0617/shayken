@@ -21,7 +21,8 @@ export type ClientMessage =
 	| { type: "join"; token?: string }
 	/** Play a card from your hand, identified by its instance id. */
 	| { type: "playCard"; iid: string }
-	| { type: "endTurn" }
+	/** End your turn. With `throw: true`, your brew is thrown at the opponent first. */
+	| { type: "endTurn"; throw?: boolean }
 	| { type: "concede" };
 
 // ---- Server -> Client (WebSocket) ----
@@ -37,7 +38,8 @@ export type ErrorCode =
 	| "NOT_PLAYING"
 	| "NOT_YOUR_TURN"
 	| "CARD_NOT_IN_HAND"
-	| "NOT_ENOUGH_ESSENCE";
+	| "NOT_ENOUGH_ESSENCE"
+	| "EMPTY_BREW";
 
 export type ServerMessage =
 	/** Sent once when you take or reclaim a seat. Keep `token` secret — it is your identity. */
@@ -60,8 +62,17 @@ export interface PlayerView {
 	 */
 	turn: { seat: Seat; number: number; msLeft: number } | null;
 	winner: Seat | null;
+	/** The most recent throw in this match, so clients can show what just happened. */
+	lastThrow: ThrowRecord | null;
 	you: PublicPlayerView & { seat: Seat; hand: CardInstance[] };
 	opponent: (PublicPlayerView & { connected: boolean; handCount: number }) | null;
+}
+
+export interface ThrowRecord {
+	seat: Seat; // who threw
+	turn: number;
+	cards: CardInstance[];
+	damage: number;
 }
 
 /** What both players can see about a player. Deck order and hand contents are never here. */

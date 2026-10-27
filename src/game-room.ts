@@ -60,7 +60,7 @@ export class GameRoom extends DurableObject<Env> {
 	async create(code: string): Promise<boolean> {
 		if (this.load()) return false;
 		const room: RoomState = {
-			code, createdAt: Date.now(), status: "waiting", players: [null, null], turn: null, winner: null, reap: null,
+			code, createdAt: Date.now(), status: "waiting", players: [null, null], turn: null, winner: null, lastThrow: null, reap: null,
 		};
 		// Nobody is connected yet, so this starts the "empty" reap timer: a room that's created
 		// but never joined gets cleaned up too.
@@ -167,7 +167,7 @@ export class GameRoom extends DurableObject<Env> {
 			case "playCard":
 				return this.handleAction(ws, (room, seat) => playCard(room, seat, msg.iid));
 			case "endTurn":
-				return this.handleAction(ws, (room, seat) => endTurn(room, seat, this.turnMs, Date.now()));
+				return this.handleAction(ws, (room, seat) => endTurn(room, seat, this.turnMs, Date.now(), msg.throw === true));
 			case "concede":
 				return this.handleAction(ws, (room, seat) => concede(room, seat));
 		}
@@ -251,6 +251,7 @@ export class GameRoom extends DurableObject<Env> {
 				msLeft: Math.max(0, room.turn.endsAt - Date.now()),
 			},
 			winner: room.winner,
+			lastThrow: room.lastThrow ?? null, // ?? for rooms saved before throwing existed
 			you: { ...publicView(me), seat, hand: me.hand },
 			opponent: opp && {
 				...publicView(opp),
@@ -334,8 +335,10 @@ function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | null {
 			if (typeof msg.iid !== "string" || msg.iid.length > 64) return null;
 			return { type: "playCard", iid: msg.iid };
 		case "endTurn":
+			if (msg.throw !== undefined && typeof msg.throw !== "boolean") return null;
+			return { type: "endTurn", throw: msg.throw };
 		case "concede":
-			return { type: msg.type };
+			return { type: "concede" };
 		default:
 			return null;
 	}

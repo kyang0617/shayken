@@ -21,6 +21,12 @@ main {
 	font-weight: bold;
 }
 
+#last-throw:not(:empty) {
+	padding: 0.4rem 0.75rem;
+	border-left: 4px solid var(--attack);
+	background: color-mix(in srgb, var(--attack) 10%, Canvas);
+}
+
 .panel {
 	border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
 	border-radius: 10px;
@@ -117,4 +123,24 @@ main {
 
 #status {
 	opacity: 0.7;
+}
+
+/* Order matters when a brew is thrown, so number the ingredients in the order they were added. */
+.row.brew {
+	counter-reset: ingredient;
+}
+.row.brew .card::before {
+	counter-increment: ingredient;
+	content: counter(ingredient);
+	position: absolute;
+	top: -8px;
+	left: -8px;
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+	background: CanvasText;
+	color: Canvas;
+	font-size: 0.7rem;
+	display: grid;
+	place-items: center;
 }

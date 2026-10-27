@@ -2,7 +2,8 @@
 // `effects`, and the client imports the same file to render cards.
 //
 // Card types (inspired by deckbuilder roguelikes):
-// - attack: goes into your brew as an ingredient. What a thrown brew does is not designed yet.
+// - attack: goes into your brew as an ingredient; its `onThrow` effects resolve when the brew
+//           is thrown at the end of a turn.
 // - skill:  one-off effect when played, then discarded. May also add itself to the brew.
 // - power:  played once, stays active for the rest of the match.
 //
@@ -20,27 +21,45 @@ export type Effect =
 	/** Power only: extra cards drawn at the start of each of your turns. */
 	| { kind: "drawPerTurn"; amount: number };
 
+/**
+ * What an ingredient contributes when the brew is thrown. Ingredients resolve in the order
+ * they were added, against a running total — see brewDamage in shared/brew.ts. The last two
+ * are "catalysts": they reward holding a bigger brew, and adding them late.
+ */
+export type ThrowEffect =
+	| { kind: "damage"; amount: number }
+	| { kind: "damagePerIngredient"; amount: number }
+	| { kind: "multiplyDamage"; factor: number };
+
 export interface CardDef {
 	id: string;
 	name: string;
 	type: CardType;
 	cost: number;
 	text: string;
+	/** Resolved when the card is played. */
 	effects: readonly Effect[];
+	/** Resolved when a brew containing this card is thrown. */
+	onThrow?: readonly ThrowEffect[];
 }
 
 const brew = { kind: "addToBrew" } as const;
+const dmg = (amount: number) => [{ kind: "damage", amount }] as const;
 
 export const CARDS = {
 	// ---- Attacks: ingredients for the brew ----
-	fire_salt: { id: "fire_salt", name: "Fire Salt", type: "attack", cost: 1, text: "Add to your brew.", effects: [brew] },
-	frost_lichen: { id: "frost_lichen", name: "Frost Lichen", type: "attack", cost: 1, text: "Add to your brew.", effects: [brew] },
-	nightshade: { id: "nightshade", name: "Nightshade", type: "attack", cost: 2, text: "Add to your brew.", effects: [brew] },
-	vampire_root: { id: "vampire_root", name: "Vampire Root", type: "attack", cost: 2, text: "Add to your brew.", effects: [brew] },
-	dragon_pepper: { id: "dragon_pepper", name: "Dragon Pepper", type: "attack", cost: 2, text: "Add to your brew.", effects: [brew] },
-	ghost_pepper: { id: "ghost_pepper", name: "Ghost Pepper", type: "attack", cost: 2, text: "Add to your brew. Draw 1.", effects: [brew, { kind: "draw", amount: 1 }] },
-	wyrm_bile: { id: "wyrm_bile", name: "Wyrm Bile", type: "attack", cost: 3, text: "Add to your brew.", effects: [brew] },
-	phoenix_feather: { id: "phoenix_feather", name: "Phoenix Feather", type: "attack", cost: 3, text: "Add to your brew.", effects: [brew] },
+	fire_salt: { id: "fire_salt", name: "Fire Salt", type: "attack", cost: 1, text: "Thrown: 2 damage.", effects: [brew], onThrow: dmg(2) },
+	frost_lichen: { id: "frost_lichen", name: "Frost Lichen", type: "attack", cost: 1, text: "Draw 1. Thrown: 1 damage.", effects: [brew, { kind: "draw", amount: 1 }], onThrow: dmg(1) },
+	nightshade: { id: "nightshade", name: "Nightshade", type: "attack", cost: 2, text: "Thrown: 3 damage.", effects: [brew], onThrow: dmg(3) },
+	vampire_root: { id: "vampire_root", name: "Vampire Root", type: "attack", cost: 2, text: "Thrown: 3 damage.", effects: [brew], onThrow: dmg(3) },
+	dragon_pepper: { id: "dragon_pepper", name: "Dragon Pepper", type: "attack", cost: 2, text: "Thrown: 3 damage.", effects: [brew], onThrow: dmg(3) },
+	ghost_pepper: { id: "ghost_pepper", name: "Ghost Pepper", type: "attack", cost: 2, text: "Draw 1. Thrown: 2 damage.", effects: [brew, { kind: "draw", amount: 1 }], onThrow: dmg(2) },
+	wyrm_bile: { id: "wyrm_bile", name: "Wyrm Bile", type: "attack", cost: 3, text: "Thrown: 5 damage.", effects: [brew], onThrow: dmg(5) },
+	phoenix_feather: { id: "phoenix_feather", name: "Phoenix Feather", type: "attack", cost: 3, text: "Thrown: 5 damage.", effects: [brew], onThrow: dmg(5) },
+
+	// ---- Attacks: catalysts (reward a bigger brew) ----
+	distillate: { id: "distillate", name: "Distillate", type: "attack", cost: 2, text: "Thrown: +1 damage per ingredient added so far (itself included).", effects: [brew], onThrow: [{ kind: "damagePerIngredient", amount: 1 }] },
+	philosophers_salt: { id: "philosophers_salt", name: "Philosopher's Salt", type: "attack", cost: 3, text: "Thrown: double the damage of everything added before it.", effects: [brew], onThrow: [{ kind: "multiplyDamage", factor: 2 }] },
 
 	// ---- Skills: immediate effects ----
 	bottled_spark: { id: "bottled_spark", name: "Bottled Spark", type: "skill", cost: 0, text: "Gain 1 essence.", effects: [{ kind: "gainEssence", amount: 1 }] },
