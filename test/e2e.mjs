@@ -100,10 +100,36 @@ check(ended.view.turn.seat !== first && ended.view.turn.number === 2 && ended.vi
 await idle.until((c) => view(c).turn.seat !== first);
 check(view(idle).you.hand.length >= 5 && view(idle).you.essence === 3, "second player drew and gained essence");
 
-const conceded = await act(active, { type: "concede" });
-check(conceded.view.status === "finished" && conceded.view.winner === view(idle).you.seat, "conceding (even off-turn) ends the match");
-await idle.until((c) => view(c).status === "finished");
-check((await act(idle, { type: "endTurn" })).code === "NOT_PLAYING", "no actions after the match ends");
+// ---- Throwing (second player's turn) ----
+check((await act(idle, { type: "endTurn", throw: true })).code === "EMPTY_BREW", "throwing an empty brew is rejected");
+check((await act(idle, { type: "endTurn", throw: "yes" })).code === "BAD_MESSAGE", "non-boolean throw flag is rejected");
+
+// Play cards until something lands in the brew. Card types live in TS, so just try each card.
+for (const c of [...view(idle).you.hand]) {
+  const res = await act(idle, { type: "playCard", iid: c.iid });
+  if (res.type === "state" && res.view.you.brew.length > 0) break;
+}
+const brewed = view(idle).you.brew.length;
+if (brewed === 0) {
+  console.log("SKIP throw checks: no ingredient was playable this hand (rare)");
+} else {
+  const discardBefore = view(idle).you.discardCount;
+  const thrown = await act(idle, { type: "endTurn", throw: true });
+  const t = thrown.view.lastThrow;
+  check(t && t.seat === view(idle).you.seat && t.cards.length === brewed, "throw is recorded with its ingredients");
+  check(thrown.view.opponent.health === 20 - t.damage, `opponent loses exactly the thrown damage (${t.damage})`);
+  check(thrown.view.you.brew.length === 0 && thrown.view.you.discardCount >= discardBefore + brewed, "thrown brew empties into the discard pile");
+  check(thrown.view.turn.seat === first, "throwing also ends the turn");
+  await active.until((c) => view(c).lastThrow !== null);
+  check(view(active).you.health === 20 - t.damage && view(active).lastThrow.damage === t.damage, "target sees the hit and the throw record");
+}
+
+// Concede off-turn: if the throw happened it's the first player's turn again; either way the
+// second player concedes.
+const conceded = await act(idle, { type: "concede" });
+check(conceded.view.status === "finished" && conceded.view.winner === view(active).you.seat, "conceding ends the match");
+await active.until((c) => view(c).status === "finished");
+check((await act(active, { type: "endTurn" })).code === "NOT_PLAYING", "no actions after the match ends");
 p0.ws.close(); p1.ws.close();
 
 finish();
