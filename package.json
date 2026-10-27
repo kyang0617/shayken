@@ -11,11 +11,13 @@
 		"cf-typegen": "wrangler types",
 		"test:e2e": "node test/e2e.mjs",
 		"dev:reap": "wrangler dev --var REAP_EMPTY_SECONDS:2 --var REAP_SOLO_SECONDS:4",
-		"test:reap": "node test/reap.mjs"
+		"test:reap": "node test/reap.mjs",
+		"test": "vitest run test/unit"
 	},
 	"devDependencies": {
 		"esbuild": "^0.28.2",
 		"typescript": "^7.0.2",
+		"vitest": "^4.1.12",
 		"wrangler": "^4.152.0"
 	}
 }
