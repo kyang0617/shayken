@@ -14,6 +14,7 @@ const codeInput = $<HTMLInputElement>("code-input");
 const endTurnBtn = $<HTMLButtonElement>("end-turn-btn");
 const throwBtn = $<HTMLButtonElement>("throw-btn");
 const concedeBtn = $<HTMLButtonElement>("concede-btn");
+const cancelBtn = $<HTMLButtonElement>("cancel-btn");
 
 // sessionStorage is per tab, so two tabs in one browser get different tokens = two players.
 // (Duplicating a tab copies sessionStorage, so the copy reclaims the same seat; the server
@@ -70,6 +71,8 @@ function connect(code: string): void {
 
 	ws.addEventListener("close", (e) => {
 		if (socket !== ws) return; // we closed it ourselves to switch rooms
+		// We asked to leave and the server let us go: the room is gone, so drop its token.
+		if (e.code === CloseCode.Left) return leaveToLobby(code, "Room cancelled.");
 		// A finished room expiring while the result screen is up: keep the screen, just say the
 		// room is gone. Only "Back to lobby" makes sense after that.
 		if (e.code === CloseCode.Expired && lastView?.status === "finished") return showRoomClosed();
@@ -123,6 +126,9 @@ function render(view: PlayerView): void {
 		: "";
 	concedeBtn.disabled = view.status !== "playing";
 	resetConcede();
+	// Only while waiting: once an opponent has joined, leaving means conceding instead.
+	cancelBtn.hidden = view.status !== "waiting";
+	cancelBtn.disabled = false;
 
 	if (view.status === "waiting") setStatus(`Share code ${view.roomCode} with your opponent.`);
 	else if (view.status === "finished") setStatus(view.winner === me.seat ? "You win! 🎉" : "You lost.");
@@ -182,17 +188,30 @@ $("result-close").addEventListener("click", () => {
 
 $("result-lobby").addEventListener("click", () => {
 	// Leave the finished room: forget its token and go back to create/join.
-	const code = lastView?.roomCode;
 	const ws = socket;
 	socket = null; // so the close handler doesn't report a disconnect
 	ws?.close();
+	leaveToLobby(lastView?.roomCode, "");
+});
+
+/** Forget a room we're done with (its token, its view) and go back to create/join. */
+function leaveToLobby(code: string | undefined, status: string): void {
+	socket = null;
 	if (code) sessionStorage.removeItem(tokenKey(code));
 	lastView = null;
 	$("result").hidden = true;
 	resultDismissed = false;
 	setRoomClosed(false);
 	showLobby();
-	setStatus("");
+	setStatus(status);
+}
+
+// Ask the server to cancel the room; it deletes the room and closes our socket with
+// CloseCode.Left, and the close handler takes us back to the lobby.
+cancelBtn.addEventListener("click", () => {
+	if (!socket) return;
+	cancelBtn.disabled = true;
+	send(socket, { type: "leave" });
 });
 
 function renderCard(card: CardInstance, playable = false): HTMLElement {
