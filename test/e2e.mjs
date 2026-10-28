@@ -56,6 +56,16 @@ check((await fetch(BASE + "/api/rooms/bad!/ws")).status === 400, "invalid code f
 
 b.ws.close();
 
+// ---- Cancelling a waiting room ----
+
+const cancelCode = await createRoom();
+const host = await join(cancelCode);
+host.ws.send(JSON.stringify({ type: "leave" }));
+await host.until((c) => c.closed !== null);
+check(host.closed === 4004, "leaving a waiting room closes the socket with Left (4004)");
+const late = await join(cancelCode);
+check(late.last("error")?.code === "ROOM_NOT_FOUND", "a cancelled room's code stops accepting joins");
+
 // ---- Game flow: a fresh room, played over real sockets ----
 
 /** Send a message and wait for the next state (or error) the sender receives. */
