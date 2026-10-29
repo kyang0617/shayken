@@ -41,16 +41,6 @@ body {
 	user-select: none;
 }
 
-/* Lighting: a vignette over the floor, warm torchlight at the top and a glow under each cauldron. */
-#stage::after {
-	content: "";
-	position: absolute;
-	inset: 0;
-	pointer-events: none;
-	background: radial-gradient(ellipse at center, transparent 45%, rgb(8 4 12 / 0.75) 100%);
-	z-index: 50;
-}
-
 img,
 .icon,
 .portrait,
