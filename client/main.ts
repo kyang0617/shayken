@@ -1,6 +1,7 @@
 // Browser client. Deliberately dumb: it renders whatever view the server sends and forwards
 // player intent. It never decides anything about the game.
 
+import { animate, snapshot } from "./anim";
 import { cardFace, clearBoard, renderBoard, setPlayHandler } from "./board";
 import "./stage";
 import { CloseCode, type ClientMessage, type CreateRoomResponse, type PlayerView, type ServerMessage } from "../shared/protocol";
@@ -91,11 +92,14 @@ function send(ws: WebSocket, msg: ClientMessage): void {
 setPlayHandler((iid) => socket && send(socket, { type: "playCard", iid }));
 
 function render(view: PlayerView): void {
+	const prev = lastView;
 	lastView = view;
 	lobby.hidden = true;
 	game.hidden = false;
 	stage.dataset.screen = "game";
+	const snap = snapshot();
 	renderBoard(view);
+	animate(snap, prev, view);
 
 	// Local deadline from the server's relative msLeft, so a wrong client clock doesn't matter.
 	turnDeadline = view.turn ? performance.now() + view.turn.msLeft : null;

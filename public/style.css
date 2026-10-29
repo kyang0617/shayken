@@ -375,7 +375,8 @@ input::placeholder {
 	margin-bottom: 2px;
 	counter-reset: ingredient;
 }
-.brew .card {
+.brew .card,
+#fx .card.icon {
 	position: relative;
 	width: 16px;
 	height: 16px;
@@ -384,7 +385,9 @@ input::placeholder {
 .brew .card:nth-child(even) {
 	animation-delay: -0.7s;
 }
-.brew .card > :not(.art) {
+.brew .card > :not(.art),
+#fx .card.icon > :not(.art),
+#fx .card.token > :not(.art) {
 	display: none;
 }
 .brew .card::after {
@@ -418,7 +421,8 @@ input::placeholder {
 .powers.you {
 	top: 230px;
 }
-.powers .card {
+.powers .card,
+#fx .card.token {
 	width: 20px;
 	height: 20px;
 	display: grid;
@@ -456,7 +460,8 @@ input::placeholder {
 
 /* Full card face: hand, preview, result screen. */
 #hand .card,
-#preview .card {
+#preview .card,
+#fx .card.full {
 	position: relative;
 	width: 56px;
 	height: 76px;
@@ -471,7 +476,8 @@ input::placeholder {
 	color: var(--ink);
 }
 #hand .card .art,
-#preview .card .art {
+#preview .card .art,
+#fx .card.full .art {
 	margin-top: 6px;
 	width: 44px;
 	height: 34px;
@@ -481,12 +487,14 @@ input::placeholder {
 	border: 1px solid var(--ink);
 }
 #hand .card .art img,
-#preview .card .art img {
+#preview .card .art img,
+#fx .card.full .art img {
 	width: 32px;
 	height: 32px;
 }
 #hand .card .cost,
-#preview .card .cost {
+#preview .card .cost,
+#fx .card.full .cost {
 	position: absolute;
 	left: -3px;
 	top: -3px;
@@ -501,12 +509,15 @@ input::placeholder {
 	text-shadow: 1px 1px var(--ink);
 }
 #hand .card .name,
-#preview .card .name {
+#preview .card .name,
+#fx .card.full .name {
 	font: 8px/7px "Tiny5", monospace;
 	text-align: center;
 }
 #hand .card .text,
-#hand .card .type {
+#hand .card .type,
+#fx .card.full .text,
+#fx .card.full .type {
 	display: none;
 }
 .card .type {
@@ -669,4 +680,47 @@ input::placeholder {
 .result-actions {
 	display: flex;
 	gap: 6px;
+}
+
+/* ---- Effects layer (client/anim.ts) ---- */
+
+#fx {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	z-index: 45;
+}
+#fx > * {
+	position: absolute !important; /* beats the zone styles ghosts borrow */
+	margin: 0;
+}
+#fx .card.icon {
+	animation: none;
+}
+.particle {
+	width: 3px;
+	height: 3px;
+	box-shadow: 0 0 0 1px var(--ink);
+}
+.float {
+	font-size: 16px;
+	text-shadow: 1px 1px var(--ink), -1px -1px var(--ink), 1px -1px var(--ink), -1px 1px var(--ink);
+}
+.float.damage {
+	color: #ff5a4a;
+}
+.float.gain {
+	font-size: 8px;
+	color: #9ad0ff;
+}
+.banner {
+	left: 0;
+	right: 0;
+	top: 160px;
+	padding: 6px 0 8px;
+	text-align: center;
+	font-size: 16px;
+	color: var(--gold);
+	text-shadow: 2px 2px var(--ink);
+	background: linear-gradient(90deg, transparent, rgb(20 12 26 / 0.9) 25%, rgb(20 12 26 / 0.9) 75%, transparent);
 }
