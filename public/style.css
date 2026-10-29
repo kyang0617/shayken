@@ -1,192 +1,672 @@
+/* Pixel-art board. Everything inside #stage is measured in art pixels on a 640×360 canvas;
+   client/stage.ts scales the whole stage up (by a whole number when it can) to fit the window. */
+
 :root {
-	color-scheme: light dark;
-	font-family: system-ui, sans-serif;
-	--attack: #c4513a;
-	--skill: #3a7bd5;
-	--power: #8a5cc4;
+	--ink: #1a1020; /* outlines, same as the sprites */
+	--text: #f4e8d8;
+	--muted: #a898b0;
+	--attack: #c8443a;
+	--skill: #3a78d0;
+	--power: #9a4ad0;
+	--gold: #ffd34d;
+	--panel: #2a2030;
+	--panel-light: #45374f;
 }
 
-main {
-	max-width: 960px;
-	margin: 2rem auto;
-	padding: 0 1rem;
+html,
+body {
+	margin: 0;
+	height: 100%;
+	overflow: hidden;
+	background: #0d0a10;
 }
 
-#join-form input {
+body {
+	display: grid;
+	place-items: center;
+}
+
+#stage {
+	position: relative;
+	width: 640px;
+	height: 360px;
+	flex: none;
+	overflow: hidden;
+	transform: scale(var(--scale, 1));
+	background: url(/sprites/floor.png) repeat;
+	color: var(--text);
+	font: 8px/1 "Silkscreen", monospace;
+	image-rendering: pixelated;
+	-webkit-font-smoothing: none;
+	user-select: none;
+}
+
+/* Lighting: a vignette over the floor, warm torchlight at the top and a glow under each cauldron. */
+#stage::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	background: radial-gradient(ellipse at center, transparent 45%, rgb(8 4 12 / 0.75) 100%);
+	z-index: 50;
+}
+
+img,
+.icon,
+.portrait,
+.cauldron,
+.torch {
+	image-rendering: pixelated;
+}
+
+p {
+	margin: 0;
+}
+
+h1,
+h2 {
+	margin: 0;
+	font-weight: normal;
+}
+
+/* ---- Buttons & inputs ---- */
+
+.btn {
+	font: inherit;
+	color: var(--text);
+	background: #6a4a3a;
+	border: 1px solid var(--ink);
+	box-shadow: inset 0 1px #a07a5a, inset 0 -2px #4a3024;
+	padding: 4px 6px 5px;
+	cursor: pointer;
+}
+.btn:hover:not(:disabled) {
+	background: #7e5a46;
+}
+.btn:active:not(:disabled) {
+	box-shadow: inset 0 2px #4a3024;
+	padding: 5px 6px 4px;
+}
+.btn:disabled {
+	color: #7a6a70;
+	background: #3a3038;
+	box-shadow: inset 0 1px #4a4048;
+	cursor: default;
+}
+.btn.big {
+	font-size: 16px;
+	padding: 6px 12px 8px;
+}
+.btn.small {
+	padding: 2px 4px 3px;
+}
+.btn.armed {
+	background: #9a2a2a;
+}
+
+input {
+	font: inherit;
+	color: var(--text);
+	background: var(--panel);
+	border: 1px solid var(--ink);
+	box-shadow: inset 0 1px #120c16;
+	padding: 4px 6px;
+	width: 64px;
 	text-transform: uppercase;
-	letter-spacing: 0.15em;
+	letter-spacing: 1px;
+}
+input::placeholder {
+	color: var(--muted);
 }
 
-#turn {
-	font-weight: bold;
-}
+/* ---- Lobby ---- */
 
-#last-throw:not(:empty) {
-	padding: 0.4rem 0.75rem;
-	border-left: 4px solid var(--attack);
-	background: color-mix(in srgb, var(--attack) 10%, Canvas);
-}
-
-.panel {
-	border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
-	border-radius: 10px;
-	padding: 0.5rem 1rem 1rem;
-	margin-bottom: 1rem;
-}
-
-.panel h3 {
-	font-size: 0.85rem;
-	margin: 0.75rem 0 0.4rem;
-	opacity: 0.7;
-}
-
-.row {
+#lobby {
+	position: absolute;
+	inset: 0;
 	display: flex;
-	flex-wrap: wrap;
-	gap: 0.75rem;
-	min-height: 1.5rem;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+}
+#lobby h1 {
+	font-size: 32px;
+	color: var(--gold);
+	text-shadow: 2px 2px var(--ink);
+	margin-bottom: 16px;
+}
+#lobby p {
+	color: var(--muted);
+}
+#join-form {
+	display: flex;
+	gap: 4px;
+}
+[hidden] {
+	display: none !important;
+}
+
+#status {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 260px;
+	text-align: center;
+	color: var(--text);
+	text-shadow: 1px 1px var(--ink);
+	z-index: 40;
+	pointer-events: none;
+}
+#stage[data-screen="game"] #status {
+	top: 148px;
+}
+#cancel-btn {
+	position: absolute;
+	left: 50%;
+	top: 162px;
+	translate: -50% 0;
+	z-index: 40;
+}
+
+/* ---- Board furniture ---- */
+
+.torch {
+	position: absolute;
+	top: 6px;
+	width: 10px;
+	height: 20px;
+	background: url(/sprites/torch.png) 0 0;
+	animation: flicker 0.45s steps(3) infinite;
+}
+.torch.left {
+	left: 200px;
+}
+.torch.right {
+	right: 200px;
+}
+.torch::before {
+	content: "";
+	position: absolute;
+	left: -60px;
+	top: -50px;
+	width: 130px;
+	height: 120px;
+	background: radial-gradient(circle, rgb(255 150 60 / 0.22), transparent 65%);
+	pointer-events: none;
+}
+@keyframes flicker {
+	to {
+		background-position: -30px 0;
+	}
+}
+
+.divider {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 179px;
+	height: 2px;
+	background: var(--ink);
+	box-shadow: 0 1px #4c3d55;
+}
+
+.room-info {
+	position: absolute;
+	right: 8px;
+	top: 6px;
+	color: var(--muted);
+}
+.room-info span {
+	color: var(--text);
+}
+
+/* ---- Heroes ---- */
+
+.hero {
+	position: absolute;
+	left: 8px;
+	display: flex;
+	gap: 4px;
+	align-items: center;
+}
+.hero.opp {
+	top: 8px;
+}
+.hero.you {
+	bottom: 8px;
+}
+.portrait {
+	width: 32px;
+	height: 32px;
+	padding: 2px;
+	background: url(/sprites/portrait-blue.png) center no-repeat, #2e4a3a;
+	border: 1px solid var(--ink);
+	box-shadow: inset 0 0 0 1px #8a6a3a;
+}
+.portrait.red {
+	background-image: url(/sprites/portrait-red.png);
+	background-color: #4a2e3a;
+}
+.stats {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+}
+.stat {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	font-size: 8px;
+}
+.icon {
+	display: inline-block;
+	width: 7px;
+	height: 8px;
+	background: url(/sprites/heart.png) center no-repeat;
+}
+.icon.essence {
+	background-image: url(/sprites/essence.png);
+}
+.conn {
+	color: #e06a5a;
+}
+
+/* ---- Piles (deck / discard) ---- */
+
+.piles {
+	position: absolute;
+	right: 10px;
+	display: flex;
+	gap: 6px;
+}
+.piles.opp {
+	top: 116px;
+}
+.piles.you {
+	top: 216px;
+}
+.pile {
+	position: relative;
+	width: 22px;
+	height: 30px;
+	border: 1px solid var(--ink);
+	background: var(--card-back);
+	box-shadow: 1px 1px var(--ink), 2px 2px #120c16;
+	display: grid;
+	place-items: center;
+}
+.pile.discard {
+	background: #2a2030;
+	box-shadow: inset 0 0 0 1px #3d3048;
+}
+.pile span {
+	text-shadow: 1px 1px var(--ink);
+}
+
+/* ---- Cauldrons and brews ---- */
+
+.cauldron-zone {
+	position: absolute;
+	left: 120px;
+	right: 120px;
+	height: 76px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-end;
+}
+.cauldron-zone.opp {
+	top: 60px;
+}
+.cauldron-zone.you {
+	top: 186px;
+}
+.cauldron {
+	width: 48px;
+	height: 36px;
+	flex: none;
+	background: url(/sprites/cauldron-green.png) 0 0;
+	animation: bubble 0.9s steps(3) infinite;
+}
+.cauldron.purple {
+	background-image: url(/sprites/cauldron-purple.png);
+}
+.cauldron::before {
+	/* glow from the brew */
+	content: "";
+	position: absolute;
+	left: 50%;
+	bottom: 0;
+	width: 120px;
+	height: 60px;
+	translate: -50% 0;
+	background: radial-gradient(ellipse at 50% 70%, var(--glow), transparent 70%);
+	pointer-events: none;
+	z-index: -1;
+}
+.cauldron.green {
+	--glow: rgb(110 220 70 / 0.22);
+}
+.cauldron.purple {
+	--glow: rgb(180 100 240 / 0.22);
+}
+@keyframes bubble {
+	to {
+		background-position: -144px 0;
+	}
+}
+.brew-dmg {
+	position: absolute;
+	left: calc(50% + 32px);
+	bottom: 12px;
+	color: var(--gold);
+	text-shadow: 1px 1px var(--ink);
+}
+
+/* Ingredients float above the cauldron, numbered in the order they were added (order matters
+   when the brew is thrown). */
+.brew {
+	display: flex;
+	flex-wrap: wrap-reverse;
+	justify-content: center;
+	gap: 2px 4px;
+	max-width: 220px;
+	margin-bottom: 2px;
+	counter-reset: ingredient;
+}
+.brew .card {
+	position: relative;
+	width: 16px;
+	height: 16px;
+	animation: bob 1.4s steps(2) infinite;
+}
+.brew .card:nth-child(even) {
+	animation-delay: -0.7s;
+}
+.brew .card > :not(.art) {
+	display: none;
+}
+.brew .card::after {
+	counter-increment: ingredient;
+	content: counter(ingredient);
+	position: absolute;
+	right: -3px;
+	bottom: -3px;
+	font: 8px/1 "Tiny5", monospace;
+	color: var(--text);
+	text-shadow: 1px 0 var(--ink), -1px 0 var(--ink), 0 1px var(--ink), 0 -1px var(--ink);
+}
+@keyframes bob {
+	50% {
+		translate: 0 -1px;
+	}
+}
+
+/* ---- Powers: the "field" beside each cauldron ---- */
+
+.powers {
+	position: absolute;
+	right: 400px;
+	display: flex;
+	flex-direction: row-reverse;
+	gap: 4px;
+}
+.powers.opp {
+	top: 104px;
+}
+.powers.you {
+	top: 230px;
+}
+.powers .card {
+	width: 20px;
+	height: 20px;
+	display: grid;
+	place-items: center;
+	background: #3a2450;
+	border: 1px solid var(--ink);
+	box-shadow: inset 0 0 0 1px var(--power), 0 0 6px rgb(154 74 208 / 0.5);
+}
+.powers .card > :not(.art) {
+	display: none;
+}
+
+/* ---- Cards ---- */
+
+:root {
+	--card-back: repeating-linear-gradient(45deg, #4a2a5a 0 2px, #3a2048 2px 4px);
 }
 
 .card {
 	--color: var(--skill);
+	box-sizing: border-box;
+	flex: none;
+}
+.card.attack {
+	--color: var(--attack);
+}
+.card.power {
+	--color: var(--power);
+}
+.card .art img {
+	display: block;
+	width: 16px;
+	height: 16px;
+}
+
+/* Full card face: hand, preview, result screen. */
+#hand .card,
+#preview .card {
 	position: relative;
-	width: 130px;
-	min-height: 150px;
-	padding: 0.75rem;
-	border: 2px solid var(--color);
-	border-radius: 10px;
-	background: color-mix(in srgb, var(--color) 12%, Canvas);
-	opacity: 0.55;
+	width: 56px;
+	height: 76px;
+	padding: 3px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 3px;
+	background: #e8d8c0;
+	border: 1px solid var(--ink);
+	box-shadow: inset 0 0 0 2px var(--color), inset 0 0 0 3px var(--ink);
+	color: var(--ink);
 }
-
-.card.attack { --color: var(--attack); }
-.card.skill { --color: var(--skill); }
-.card.power { --color: var(--power); }
-
-/* Cards in brew/powers areas are just information, so show them small and fully opaque. */
-.row.small .card {
-	width: 90px;
-	min-height: 0;
-	padding: 0.4rem;
-	font-size: 0.8rem;
-	opacity: 1;
-}
-.row.small .card .text,
-.row.small .card .cost {
-	display: none;
-}
-
-.card.playable {
-	opacity: 1;
-	cursor: pointer;
-}
-.card.playable:hover {
-	transform: translateY(-4px);
-}
-
-.card .cost {
-	position: absolute;
-	top: -10px;
-	right: -10px;
-	width: 28px;
-	height: 28px;
-	border-radius: 50%;
-	background: var(--color);
-	color: white;
+#hand .card .art,
+#preview .card .art {
+	margin-top: 6px;
+	width: 44px;
+	height: 34px;
 	display: grid;
 	place-items: center;
-	font-weight: bold;
+	background: #2a2030;
+	border: 1px solid var(--ink);
 }
-
+#hand .card .art img,
+#preview .card .art img {
+	width: 32px;
+	height: 32px;
+}
+#hand .card .cost,
+#preview .card .cost {
+	position: absolute;
+	left: -3px;
+	top: -3px;
+	width: 13px;
+	height: 13px;
+	display: grid;
+	place-items: center;
+	background: #3a6ad8;
+	border: 1px solid var(--ink);
+	box-shadow: inset 1px 1px #8ab0ff;
+	color: white;
+	text-shadow: 1px 1px var(--ink);
+}
+#hand .card .name,
+#preview .card .name {
+	font: 8px/7px "Tiny5", monospace;
+	text-align: center;
+}
+#hand .card .text,
+#hand .card .type {
+	display: none;
+}
 .card .type {
-	font-size: 0.7rem;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
+	font: 8px/1 "Tiny5", monospace;
 	color: var(--color);
+	text-transform: uppercase;
 }
 
-.card .name {
-	font-weight: bold;
-	margin-bottom: 0.5rem;
+/* The hand fans along the bottom edge. Unplayable cards are dimmed; the server checks anyway. */
+#hand {
+	position: absolute;
+	left: 140px;
+	right: 140px;
+	bottom: -14px;
+	height: 80px;
+	display: flex;
+	justify-content: center;
+	gap: 3px;
+}
+#hand .card {
+	filter: brightness(0.6) saturate(0.6);
+	transition: translate 0.1s steps(2);
+}
+#hand .card.playable {
+	filter: none;
+	cursor: pointer;
+}
+#hand .card:hover {
+	translate: 0 -14px;
+	z-index: 5;
+}
+#hand .card.playable:hover {
+	box-shadow: inset 0 0 0 2px var(--color), inset 0 0 0 3px var(--ink), 0 0 0 1px var(--gold);
 }
 
-.card .text {
-	font-size: 0.85rem;
-	opacity: 0.8;
+/* Opponent's hand: card backs peeking in from the top edge. */
+.hand-backs {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: -12px;
+	display: flex;
+	justify-content: center;
+}
+.card-back {
+	width: 24px;
+	height: 32px;
+	margin: 0 -3px;
+	border: 1px solid var(--ink);
+	background: var(--card-back);
+	box-shadow: inset 0 0 0 1px #7a4a8a;
+}
+
+/* Hovering any card shows it enlarged here, with its rules text. */
+#preview {
+	position: absolute;
+	left: 10px;
+	top: 102px;
+	z-index: 30;
+	pointer-events: none;
+}
+#preview .card {
+	width: 84px;
+	height: 116px;
+	gap: 4px;
+}
+#preview .card .art {
+	width: 72px;
+	height: 44px;
+}
+#preview .card .name {
+	font: 16px/1 "Silkscreen", monospace;
+	font-size: 8px;
+}
+#preview .card .text {
+	font: 8px/8px "Tiny5", monospace;
+	text-align: center;
+	padding: 0 2px;
+}
+
+/* ---- Turn + actions ---- */
+
+#turn {
+	position: absolute;
+	right: 8px;
+	top: 172px;
+	padding: 3px 5px;
+	background: var(--panel);
+	border: 1px solid var(--ink);
+	box-shadow: inset 0 1px var(--panel-light);
+	z-index: 2;
+}
+#turn:empty {
+	display: none;
+}
+#turn.mine {
+	color: var(--gold);
+}
+#last-throw {
+	position: absolute;
+	left: 8px;
+	top: 184px;
+	max-width: 180px;
+	line-height: 9px;
+	color: var(--muted);
 }
 
 .actions {
-	margin-top: 1rem;
-	display: flex;
-	gap: 0.5rem;
-}
-
-#status {
-	opacity: 0.7;
-}
-
-/* Order matters when a brew is thrown, so number the ingredients in the order they were added. */
-.row.brew {
-	counter-reset: ingredient;
-}
-.row.brew .card::before {
-	counter-increment: ingredient;
-	content: counter(ingredient);
 	position: absolute;
-	top: -8px;
-	left: -8px;
-	width: 20px;
-	height: 20px;
-	border-radius: 50%;
-	background: CanvasText;
-	color: Canvas;
-	font-size: 0.7rem;
-	display: grid;
-	place-items: center;
+	right: 8px;
+	bottom: 8px;
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 3px;
+	width: 96px;
+}
+#throw-btn:not(:disabled) {
+	background: #a03a2a;
+	box-shadow: inset 0 1px #e07a5a, inset 0 -2px #6a2018;
 }
 
 /* ---- Win / lose screen ---- */
+
 .overlay {
-	position: fixed;
+	position: absolute;
 	inset: 0;
 	display: grid;
 	place-items: center;
-	padding: 1rem;
-	background: color-mix(in srgb, Canvas 40%, transparent);
-	backdrop-filter: blur(3px);
-}
-.overlay[hidden] {
-	display: none;
+	background: rgb(10 6 14 / 0.7);
+	z-index: 60;
 }
 .result-card {
-	--color: #6b6b6b;
-	width: min(420px, 100%);
-	padding: 1.5rem;
-	border: 3px solid var(--color);
-	border-radius: 14px;
-	background: Canvas;
+	--color: #8a7a90;
+	min-width: 200px;
+	padding: 12px 16px;
+	background: var(--panel);
+	border: 1px solid var(--ink);
+	box-shadow: inset 0 0 0 2px var(--color), inset 0 0 0 3px var(--ink);
 	text-align: center;
-	box-shadow: 0 10px 40px rgb(0 0 0 / 0.25);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
 }
 .overlay.won .result-card {
-	--color: #d4a017;
+	--color: var(--gold);
 }
 .result-card h2 {
-	margin-top: 0;
-	font-size: 2rem;
+	font-size: 24px;
 	color: var(--color);
+	text-shadow: 2px 2px var(--ink);
 }
-.result-card .row {
-	justify-content: center;
-	margin: 1rem 0;
-}
-.result-card .actions {
-	justify-content: center;
-}
-.result-card #result-brew:empty {
+#result-brew:empty {
 	display: none;
 }
 #result-closed {
-	font-style: italic;
-	opacity: 0.7;
+	color: var(--muted);
+}
+.result-actions {
+	display: flex;
+	gap: 6px;
 }

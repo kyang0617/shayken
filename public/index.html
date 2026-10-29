@@ -4,53 +4,82 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<title>Shayken</title>
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=Tiny5&display=swap" rel="stylesheet" />
 		<link rel="stylesheet" href="/style.css" />
 	</head>
 	<body>
-		<main>
-			<h1>Shayken</h1>
-
+		<!-- Everything is laid out on a fixed 640×360 pixel stage that client/stage.ts scales up to
+		     fit the window, so 1 CSS px inside it is 1 art pixel. -->
+		<div id="stage" data-screen="lobby">
 			<section id="lobby">
-				<button id="create-btn">Create room</button>
+				<h1>Shayken</h1>
+				<button id="create-btn" class="btn big">Create room</button>
 				<p>or</p>
 				<form id="join-form">
-					<input id="code-input" placeholder="Room code" maxlength="6" autocomplete="off" />
-					<button type="submit">Join</button>
+					<input id="code-input" placeholder="CODE" maxlength="6" autocomplete="off" spellcheck="false" />
+					<button type="submit" class="btn">Join</button>
 				</form>
 			</section>
 
 			<section id="game" hidden>
-				<p>
-					Room <strong id="room-code"></strong> · You are <strong id="seat"></strong>
-					<button id="cancel-btn" hidden>Cancel room</button>
-				</p>
+				<div class="torch left"></div>
+				<div class="torch right"></div>
+				<div class="divider"></div>
+				<div class="room-info">Room <span id="room-code"></span> · <span id="seat"></span></div>
+
+				<!-- Opponent (top half) -->
+				<div id="opp-hand" class="hand-backs"></div>
+				<div class="hero opp">
+					<div class="portrait red"></div>
+					<div class="stats">
+						<span class="stat"><i class="icon heart"></i><b id="opp-health"></b></span>
+						<span class="stat"><i class="icon essence"></i><b id="opp-essence"></b></span>
+						<span id="opp-conn" class="conn"></span>
+					</div>
+				</div>
+				<div class="piles opp">
+					<div class="pile deck" title="Deck"><span id="opp-deck"></span></div>
+					<div class="pile discard" title="Discard pile"><span id="opp-discard"></span></div>
+				</div>
+				<div id="opp-powers" class="powers opp"></div>
+				<div class="cauldron-zone opp">
+					<div id="opp-brew" class="brew"></div>
+					<div class="cauldron purple"></div>
+					<div id="opp-brew-dmg" class="brew-dmg"></div>
+				</div>
+
 				<p id="turn"></p>
 				<p id="last-throw"></p>
 
-				<div class="panel">
-					<h2>Opponent</h2>
-					<p id="opp-stats"></p>
-					<h3>Brew <span id="opp-brew-dmg"></span></h3>
-					<div id="opp-brew" class="row small brew"></div>
-					<h3>Powers</h3>
-					<div id="opp-powers" class="row small"></div>
+				<!-- You (bottom half) -->
+				<div class="cauldron-zone you">
+					<div id="my-brew" class="brew"></div>
+					<div class="cauldron green"></div>
+					<div id="my-brew-dmg" class="brew-dmg"></div>
 				</div>
-
-				<div class="panel">
-					<h2>You</h2>
-					<p id="my-stats"></p>
-					<h3>Brew <span id="my-brew-dmg"></span></h3>
-					<div id="my-brew" class="row small brew"></div>
-					<h3>Powers</h3>
-					<div id="my-powers" class="row small"></div>
-					<h3>Hand</h3>
-					<div id="hand" class="row"></div>
-					<div class="actions">
-						<button id="end-turn-btn">End turn (hold brew)</button>
-						<button id="throw-btn">Throw &amp; end turn</button>
-						<button id="concede-btn">Concede</button>
+				<div id="my-powers" class="powers you"></div>
+				<div class="piles you">
+					<div class="pile deck" title="Deck"><span id="my-deck"></span></div>
+					<div class="pile discard" title="Discard pile"><span id="my-discard"></span></div>
+				</div>
+				<div class="hero you">
+					<div class="portrait blue"></div>
+					<div class="stats">
+						<span class="stat"><i class="icon heart"></i><b id="my-health"></b></span>
+						<span class="stat"><i class="icon essence"></i><b id="my-essence"></b></span>
 					</div>
 				</div>
+				<div id="hand"></div>
+				<div class="actions">
+					<button id="throw-btn" class="btn">Throw</button>
+					<button id="end-turn-btn" class="btn">End turn</button>
+					<button id="concede-btn" class="btn small">Concede</button>
+				</div>
+
+				<button id="cancel-btn" class="btn" hidden>Cancel room</button>
+				<div id="preview" hidden></div>
 			</section>
 
 			<p id="status"></p>
@@ -59,16 +88,16 @@
 				<div class="result-card">
 					<h2 id="result-title"></h2>
 					<p id="result-detail"></p>
-					<div id="result-brew" class="row small brew"></div>
+					<div id="result-brew" class="brew"></div>
 					<p id="result-stats"></p>
 					<p id="result-closed" hidden>This room has closed.</p>
-					<div class="actions">
-						<button id="result-lobby">Back to lobby</button>
-						<button id="result-close">View board</button>
+					<div class="result-actions">
+						<button id="result-lobby" class="btn">Back to lobby</button>
+						<button id="result-close" class="btn">View board</button>
 					</div>
 				</div>
 			</div>
-		</main>
+		</div>
 		<script type="module" src="/main.js"></script>
 	</body>
 </html>

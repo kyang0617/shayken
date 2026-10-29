@@ -1,12 +1,13 @@
 // Browser client. Deliberately dumb: it renders whatever view the server sends and forwards
 // player intent. It never decides anything about the game.
 
-import { brewDamage } from "../shared/brew";
-import { CARDS, type CardInstance } from "../shared/cards";
+import { cardFace, clearBoard, renderBoard, setPlayHandler } from "./board";
+import "./stage";
 import { CloseCode, type ClientMessage, type CreateRoomResponse, type PlayerView, type ServerMessage } from "../shared/protocol";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
+const stage = $("stage");
 const lobby = $("lobby");
 const game = $("game");
 const statusEl = $("status");
@@ -87,51 +88,26 @@ function send(ws: WebSocket, msg: ClientMessage): void {
 	ws.send(JSON.stringify(msg));
 }
 
+setPlayHandler((iid) => socket && send(socket, { type: "playCard", iid }));
+
 function render(view: PlayerView): void {
 	lastView = view;
 	lobby.hidden = true;
 	game.hidden = false;
-	$("room-code").textContent = view.roomCode;
-	$("seat").textContent = `Player ${view.you.seat + 1}`;
+	stage.dataset.screen = "game";
+	renderBoard(view);
 
-	const myTurn = view.status === "playing" && view.turn?.seat === view.you.seat;
 	// Local deadline from the server's relative msLeft, so a wrong client clock doesn't matter.
 	turnDeadline = view.turn ? performance.now() + view.turn.msLeft : null;
-
-	const opp = view.opponent;
-	$("opp-stats").textContent = opp
-		? `${opp.connected ? "" : "(disconnected) "}❤️ ${opp.health} · 💧 ${opp.essence} essence · ${opp.handCount} in hand · ${opp.deckCount} deck · ${opp.discardCount} discard`
-		: "Waiting for an opponent to join…";
-	$("opp-brew").replaceChildren(...(opp?.brew ?? []).map((c) => renderCard(c)));
-	$("opp-brew-dmg").textContent = opp?.brew.length ? `— ${brewDamage(opp.brew)} damage if thrown` : "";
-	$("opp-powers").replaceChildren(...(opp?.powers ?? []).map((c) => renderCard(c)));
-
-	const me = view.you;
-	$("my-stats").textContent = `❤️ ${me.health} · 💧 ${me.essence} essence · ${me.deckCount} deck · ${me.discardCount} discard`;
-	$("my-brew").replaceChildren(...me.brew.map((c) => renderCard(c)));
-	// Same formula the server uses to resolve the throw (shared/brew.ts), so the preview is exact.
-	const myBrewDamage = brewDamage(me.brew);
-	$("my-brew-dmg").textContent = me.brew.length ? `— ${myBrewDamage} damage if thrown` : "";
-	$("my-powers").replaceChildren(...me.powers.map((c) => renderCard(c)));
-	// Greying out unplayable cards is only a convenience; the server checks every play anyway.
-	$("hand").replaceChildren(...me.hand.map((c) => renderCard(c, myTurn && CARDS[c.cardId].cost <= me.essence)));
-
-	endTurnBtn.disabled = !myTurn;
-	throwBtn.disabled = !myTurn || me.brew.length === 0;
-	throwBtn.textContent = me.brew.length ? `Throw (${myBrewDamage}) & end turn` : "Throw & end turn";
-
-	const t = view.lastThrow;
-	$("last-throw").textContent = t
-		? `${t.seat === me.seat ? "You" : "Opponent"} threw ${t.cards.length} ingredient${t.cards.length === 1 ? "" : "s"} for ${t.damage} damage (turn ${t.turn}).`
-		: "";
 	concedeBtn.disabled = view.status !== "playing";
 	resetConcede();
 	// Only while waiting: once an opponent has joined, leaving means conceding instead.
 	cancelBtn.hidden = view.status !== "waiting";
 	cancelBtn.disabled = false;
 
+	const me = view.you;
 	if (view.status === "waiting") setStatus(`Share code ${view.roomCode} with your opponent.`);
-	else if (view.status === "finished") setStatus(view.winner === me.seat ? "You win! 🎉" : "You lost.");
+	else if (view.status === "finished") setStatus(view.winner === me.seat ? "You win!" : "You lost.");
 	else setStatus("");
 	updateTurnLabel();
 	renderResult(view);
@@ -163,8 +139,8 @@ function renderResult(view: PlayerView): void {
 	$("result-detail").textContent = knockout && t
 		? `${won ? "Your" : "Your opponent's"} ${t.cards.length}-ingredient brew hit for ${t.damage} damage.`
 		: won ? "Your opponent conceded." : "You conceded.";
-	$("result-stats").textContent = `Final health — you ${me.health}, opponent ${opp.health}`;
-	$("result-brew").replaceChildren(...(knockout && t ? t.cards.map((c) => renderCard(c)) : []));
+	$("result-stats").textContent = `Final health: you ${me.health}, opponent ${opp.health}`;
+	$("result-brew").replaceChildren(...(knockout && t ? t.cards.map((c) => cardFace(c.cardId)) : []));
 	overlay.hidden = resultDismissed;
 }
 
@@ -199,6 +175,7 @@ function leaveToLobby(code: string | undefined, status: string): void {
 	socket = null;
 	if (code) sessionStorage.removeItem(tokenKey(code));
 	lastView = null;
+	clearBoard();
 	$("result").hidden = true;
 	resultDismissed = false;
 	setRoomClosed(false);
@@ -214,30 +191,18 @@ cancelBtn.addEventListener("click", () => {
 	send(socket, { type: "leave" });
 });
 
-function renderCard(card: CardInstance, playable = false): HTMLElement {
-	const def = CARDS[card.cardId];
-	const el = document.createElement("div");
-	el.className = `card ${def.type}${playable ? " playable" : ""}`;
-	el.innerHTML = `<div class="cost"></div><div class="type"></div><div class="name"></div><div class="text"></div>`;
-	// textContent, not innerHTML, for data: never inject strings as HTML.
-	el.querySelector(".cost")!.textContent = String(def.cost);
-	el.querySelector(".type")!.textContent = def.type;
-	el.querySelector(".name")!.textContent = def.name;
-	el.querySelector(".text")!.textContent = def.text;
-	if (playable) el.addEventListener("click", () => socket && send(socket, { type: "playCard", iid: card.iid }));
-	return el;
-}
-
 function updateTurnLabel(): void {
 	const view = lastView;
 	const label = $("turn");
 	if (!view?.turn || view.status !== "playing") {
 		label.textContent = view?.status === "finished" ? "Match over" : "";
+		label.classList.remove("mine");
 		return;
 	}
 	const secs = Math.max(0, Math.ceil(((turnDeadline ?? 0) - performance.now()) / 1000));
-	const whose = view.turn.seat === view.you.seat ? "Your turn" : "Opponent's turn";
-	label.textContent = `Turn ${view.turn.number} · ${whose} · ${secs}s`;
+	const mine = view.turn.seat === view.you.seat;
+	label.textContent = `Turn ${view.turn.number} · ${mine ? "Your turn" : "Their turn"} · ${secs}s`;
+	label.classList.toggle("mine", mine);
 }
 setInterval(updateTurnLabel, 250);
 
@@ -249,7 +214,8 @@ let concedeArmed = false;
 concedeBtn.addEventListener("click", () => {
 	if (!concedeArmed) {
 		concedeArmed = true;
-		concedeBtn.textContent = "Really concede?";
+		concedeBtn.textContent = "Really?";
+		concedeBtn.classList.add("armed");
 		setTimeout(resetConcede, 3000);
 	} else if (socket) {
 		send(socket, { type: "concede" });
@@ -258,11 +224,13 @@ concedeBtn.addEventListener("click", () => {
 function resetConcede(): void {
 	concedeArmed = false;
 	concedeBtn.textContent = "Concede";
+	concedeBtn.classList.remove("armed");
 }
 
 function showLobby(): void {
 	lobby.hidden = false;
 	game.hidden = true;
+	stage.dataset.screen = "lobby";
 	history.replaceState(null, "", location.pathname);
 }
 
