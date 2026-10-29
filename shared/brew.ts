@@ -33,3 +33,12 @@ export function brewDamage(brew: readonly CardInstance[]): number {
 	});
 	return total;
 }
+
+/**
+ * Damage that gets through a spell shield blocking `shield` percent (see SHIELD_STEPS). Rounds
+ * up, so any hit of 1 or more always deals at least 1. Shared for the same reason as brewDamage:
+ * the server resolves throws with it and the client previews them with it.
+ */
+export function damageAfterShield(damage: number, shield: number): number {
+	return Math.ceil((damage * (100 - shield)) / 100);
+}

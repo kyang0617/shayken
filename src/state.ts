@@ -8,6 +8,7 @@ export interface PlayerState {
 	token: string;
 	health: number;
 	essence: number;
+	shield: number; // percent of throw damage blocked; one of SHIELD_STEPS
 	deck: CardInstance[]; // index 0 is the top; order is hidden from everyone
 	hand: CardInstance[];
 	discard: CardInstance[];

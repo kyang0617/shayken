@@ -3,9 +3,9 @@
 
 import { describe, expect, it } from "vitest";
 import type { CardId, CardInstance } from "../../shared/cards";
-import { brewDamage } from "../../shared/brew";
+import { brewDamage, damageAfterShield } from "../../shared/brew";
 import { DECK_SIZE, STARTER_DECK } from "../../shared/decks";
-import { ESSENCE_PER_TURN, HAND_SIZE, STARTING_HEALTH } from "../../shared/rules";
+import { ESSENCE_PER_TURN, HAND_SIZE, SHIELD_STEPS, STARTING_HEALTH } from "../../shared/rules";
 import { concede, endTurn, newPlayer, playCard, startMatch } from "../../src/rules";
 import type { RoomState } from "../../src/state";
 
@@ -257,11 +257,15 @@ describe("brewDamage", () => {
 });
 
 describe("throwing", () => {
-	/** Seat 0 is active with `brewIds` already in the brew; seat 1 has a deck to draw from. */
-	function roomWithBrew(brewIds: CardId[]): RoomState {
+	/**
+	 * Seat 0 is active with `brewIds` already in the brew; seat 1 has a deck to draw from.
+	 * Seat 1 starts with no shield so these tests see raw brew damage; "spell shield" covers it.
+	 */
+	function roomWithBrew(brewIds: CardId[], targetShield = 0): RoomState {
 		const room = roomWithHand(["honey_mead"]);
 		room.players[0]!.brew = brewIds.map(card);
 		room.players[1]!.deck = Array.from({ length: 10 }, () => card("fire_salt"));
+		room.players[1]!.shield = targetShield;
 		return room;
 	}
 
@@ -272,7 +276,7 @@ describe("throwing", () => {
 		expect(room.players[1]!.health).toBe(STARTING_HEALTH - 5);
 		expect(room.players[0]!.brew).toHaveLength(0);
 		expect(room.players[0]!.discard.map((c) => c.iid)).toEqual(expect.arrayContaining(thrown));
-		expect(room.lastThrow).toMatchObject({ seat: 0, turn: 1, damage: 5 });
+		expect(room.lastThrow).toMatchObject({ seat: 0, turn: 1, damage: 5, blocked: 0 });
 		expect(room.lastThrow!.cards.map((c) => c.iid)).toEqual(thrown);
 		expect(room.turn!.seat).toBe(1);
 	});
@@ -312,5 +316,65 @@ describe("throwing", () => {
 		endTurn(room, 0, TURN_MS, NOW, true);
 		expect(room.players[1]!.health).toBe(1);
 		expect(room.status).toBe("playing");
+	});
+});
+
+describe("spell shield", () => {
+	/** Seat 0 is active and about to throw `brewIds` at seat 1, who has the starting shield. */
+	function throwAt(brewIds: CardId[], shield = SHIELD_STEPS[0]): RoomState {
+		const room = roomWithHand([]);
+		room.players[0]!.brew = brewIds.map(card);
+		room.players[1]!.deck = Array.from({ length: 10 }, () => card("fire_salt"));
+		room.players[1]!.shield = shield;
+		endTurn(room, 0, TURN_MS, NOW, true);
+		return room;
+	}
+
+	it("everyone starts on the first step", () => {
+		expect(newPlayer("t").shield).toBe(50);
+	});
+
+	it("damageAfterShield blocks the percentage and rounds what gets through up", () => {
+		expect(damageAfterShield(10, 50)).toBe(5);
+		expect(damageAfterShield(5, 50)).toBe(3); // 2.5 -> 3
+		expect(damageAfterShield(5, 25)).toBe(4); // 3.75 -> 4
+		expect(damageAfterShield(1, 50)).toBe(1); // a hit always deals at least 1
+		expect(damageAfterShield(7, 0)).toBe(7);
+		expect(damageAfterShield(0, 50)).toBe(0);
+	});
+
+	it("each damaging hit is softened by the current step, then drops it: 50% -> 25% -> 0%", () => {
+		const first = throwAt(["wyrm_bile", "phoenix_feather"]); // 10 damage
+		expect(first.players[1]!.health).toBe(STARTING_HEALTH - 5);
+		expect(first.lastThrow).toMatchObject({ damage: 5, blocked: 5 });
+		expect(first.players[1]!.shield).toBe(25);
+
+		const second = throwAt(["wyrm_bile", "phoenix_feather"], 25);
+		expect(second.players[1]!.health).toBe(STARTING_HEALTH - 8); // 7.5 -> 8
+		expect(second.players[1]!.shield).toBe(0);
+
+		const third = throwAt(["wyrm_bile", "phoenix_feather"], 0);
+		expect(third.players[1]!.health).toBe(STARTING_HEALTH - 10);
+		expect(third.players[1]!.shield).toBe(0); // stays at the last step
+	});
+
+	it("a throw that deals no damage doesn't break the shield", () => {
+		const room = throwAt(["troll_moss"]); // a free 0-damage ingredient
+		expect(room.players[1]!.health).toBe(STARTING_HEALTH);
+		expect(room.players[1]!.shield).toBe(50);
+	});
+
+	it("only the target's shield changes", () => {
+		const room = throwAt(["fire_salt"]);
+		expect(room.players[0]!.shield).toBe(50);
+	});
+
+	it("a shielded hit can still be lethal", () => {
+		const room = roomWithHand([]);
+		room.players[0]!.brew = [card("wyrm_bile")]; // 5 -> 3 through a 50% shield
+		room.players[1]!.health = 3;
+		endTurn(room, 0, TURN_MS, NOW, true);
+		expect(room.players[1]!.health).toBe(0);
+		expect(room).toMatchObject({ status: "finished", winner: 0 });
 	});
 });
