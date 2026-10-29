@@ -380,3 +380,13 @@ save("essence.png", fromMap([
 	".o211o.",
 	"..ooo..",
 ], { o: OUTLINE, 1: "#2a5ab0", 2: "#4a8af0", 3: "#9ad0ff", w: "#ffffff" }));
+save("shield.png", fromMap([
+	"ooooooo",
+	"o3w222o",
+	"o32221o",
+	"o32221o",
+	".o221o.",
+	".o221o.",
+	"..o1o..",
+	"...o...",
+], { o: OUTLINE, 1: "#5a6a8a", 2: "#8a9ac0", 3: "#c8d4f0", w: "#ffffff" }));

@@ -2,7 +2,7 @@
 // keeps the same DOM element as it moves between hand, brew and powers, so it can be animated
 // from where it was to where it is (see anim.ts). CSS decides how a card looks in each zone.
 
-import { brewDamage } from "../shared/brew";
+import { brewDamage, damageAfterShield } from "../shared/brew";
 import { CARDS, type CardId, type CardInstance } from "../shared/cards";
 import type { PlayerView } from "../shared/protocol";
 
@@ -79,23 +79,27 @@ export function renderBoard(view: PlayerView): void {
 	}));
 	$("opp-health").textContent = opp ? String(opp.health) : "-";
 	$("opp-essence").textContent = opp ? String(opp.essence) : "-";
+	renderShield("opp-shield", opp?.shield ?? null);
 	$("opp-conn").textContent = opp && !opp.connected ? "Disconnected" : "";
 	$("opp-deck").textContent = opp ? String(opp.deckCount) : "";
 	$("opp-discard").textContent = opp ? String(opp.discardCount) : "";
 	place($("opp-brew"), opp?.brew ?? []);
 	place($("opp-powers"), opp?.powers ?? []);
-	$("opp-brew-dmg").textContent = opp?.brew.length ? `${brewDamage(opp.brew)} dmg` : "";
+	$("opp-brew-dmg").textContent = opp?.brew.length ? damageLabel(brewDamage(opp.brew), me.shield) : "";
 
 	// You
 	$("my-health").textContent = String(me.health);
 	$("my-essence").textContent = String(me.essence);
+	renderShield("my-shield", me.shield);
 	$("my-deck").textContent = String(me.deckCount);
 	$("my-discard").textContent = String(me.discardCount);
 	place($("my-brew"), me.brew);
 	place($("my-powers"), me.powers);
 	// Same formula the server uses to resolve the throw (shared/brew.ts), so the preview is exact.
+	// Same for the shield: show what would actually get through the opponent's shield.
 	const myBrewDamage = brewDamage(me.brew);
-	$("my-brew-dmg").textContent = me.brew.length ? `${myBrewDamage} dmg` : "";
+	const oppShield = opp?.shield ?? 0;
+	$("my-brew-dmg").textContent = me.brew.length ? damageLabel(myBrewDamage, oppShield) : "";
 	// Highlighting playable cards is only a convenience; the server checks every play anyway.
 	place($("hand"), me.hand, (c) => myTurn && CARDS[c.cardId].cost <= me.essence);
 
@@ -103,11 +107,11 @@ export function renderBoard(view: PlayerView): void {
 	const throwBtn = $<HTMLButtonElement>("throw-btn");
 	endTurnBtn.disabled = !myTurn;
 	throwBtn.disabled = !myTurn || me.brew.length === 0;
-	throwBtn.textContent = me.brew.length ? `Throw (${myBrewDamage})` : "Throw";
+	throwBtn.textContent = me.brew.length ? `Throw (${damageAfterShield(myBrewDamage, oppShield)})` : "Throw";
 
 	const t = view.lastThrow;
 	$("last-throw").textContent = t
-		? `${t.seat === me.seat ? "You" : "Opponent"} threw ${t.cards.length} ingredient${t.cards.length === 1 ? "" : "s"} for ${t.damage} damage.`
+		? `${t.seat === me.seat ? "You" : "Opponent"} threw ${t.cards.length} ingredient${t.cards.length === 1 ? "" : "s"} for ${t.damage} damage${t.blocked ? ` (${t.blocked} blocked)` : ""}.`
 		: "";
 
 	// Forget elements for cards no longer on the board (discarded, drawn back later as the
@@ -115,6 +119,18 @@ export function renderBoard(view: PlayerView): void {
 	const onBoard = new Set([...me.hand, ...me.brew, ...me.powers, ...(opp?.brew ?? []), ...(opp?.powers ?? [])].map((c) => c.iid));
 	for (const [iid, el] of cardEls) if (!onBoard.has(iid)) { el.remove(); cardEls.delete(iid); }
 	if (!preview.hidden && ![...cardEls.values()].some((el) => el.matches(":hover"))) hidePreview();
+}
+
+/** "12 dmg", or "12 > 6 dmg" when a shield would block some of it. */
+function damageLabel(raw: number, shield: number): string {
+	const through = damageAfterShield(raw, shield);
+	return through === raw ? `${raw} dmg` : `${raw} > ${through} dmg`;
+}
+
+function renderShield(id: string, shield: number | null): void {
+	const el = $(id);
+	el.textContent = shield === null ? "-" : `${shield}%`;
+	el.parentElement!.classList.toggle("broken", shield === 0);
 }
 
 /** Drop every card element, e.g. when leaving a room. */
