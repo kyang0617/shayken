@@ -151,11 +151,13 @@ input::placeholder {
 #stage[data-screen="game"] #status {
 	top: 148px;
 }
-#cancel-btn {
+#waiting-actions {
 	position: absolute;
 	left: 50%;
 	top: 162px;
 	translate: -50% 0;
+	display: flex;
+	gap: 6px;
 	z-index: 40;
 }
 

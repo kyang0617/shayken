@@ -17,6 +17,7 @@ const endTurnBtn = $<HTMLButtonElement>("end-turn-btn");
 const throwBtn = $<HTMLButtonElement>("throw-btn");
 const concedeBtn = $<HTMLButtonElement>("concede-btn");
 const cancelBtn = $<HTMLButtonElement>("cancel-btn");
+const copyBtn = $<HTMLButtonElement>("copy-btn");
 
 // sessionStorage is per tab, so two tabs in one browser get different tokens = two players.
 // (Duplicating a tab copies sessionStorage, so the copy reclaims the same seat; the server
@@ -106,7 +107,7 @@ function render(view: PlayerView): void {
 	concedeBtn.disabled = view.status !== "playing";
 	resetConcede();
 	// Only while waiting: once an opponent has joined, leaving means conceding instead.
-	cancelBtn.hidden = view.status !== "waiting";
+	$("waiting-actions").hidden = view.status !== "waiting";
 	cancelBtn.disabled = false;
 
 	const me = view.you;
@@ -193,6 +194,20 @@ cancelBtn.addEventListener("click", () => {
 	if (!socket) return;
 	cancelBtn.disabled = true;
 	send(socket, { type: "leave" });
+});
+
+// The clipboard API only works on secure origins (https or localhost); if it's unavailable or
+// refused, the code is still right there in the status line to copy by hand.
+copyBtn.addEventListener("click", async () => {
+	const code = lastView?.roomCode;
+	if (!code) return;
+	try {
+		await navigator.clipboard.writeText(code);
+		copyBtn.textContent = "Copied!";
+	} catch {
+		copyBtn.textContent = "Copy failed";
+	}
+	setTimeout(() => (copyBtn.textContent = "Copy code"), 1500);
 });
 
 function updateTurnLabel(): void {
