@@ -330,6 +330,7 @@ function publicView(p: PlayerState): PublicPlayerView {
 	return {
 		health: p.health,
 		essence: p.essence,
+		shield: p.shield ?? 0, // ?? for rooms saved before shields existed
 		deckCount: p.deck.length,
 		discardCount: p.discard.length,
 		brew: p.brew,

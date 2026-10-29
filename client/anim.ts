@@ -128,6 +128,8 @@ export function animate(snap: Snapshot, prev: PlayerView | null, view: PlayerVie
 	if (throwNew) impactAt = throwBrew(snap, view);
 	healthChange(".hero.you", prev.you.health, me.health, impactAt);
 	if (prev.opponent && view.opponent) healthChange(".hero.opp", prev.opponent.health, view.opponent.health, impactAt);
+	shieldChange("#my-shield", prev.you.shield, me.shield, impactAt);
+	if (prev.opponent && view.opponent) shieldChange("#opp-shield", prev.opponent.shield, view.opponent.shield, impactAt);
 	essenceChange("#my-essence", prev.you.essence, me.essence);
 	if (prev.opponent && view.opponent) essenceChange("#opp-essence", prev.opponent.essence, view.opponent.essence);
 	if (view.status === "playing" && view.turn && view.turn.number !== prev.turn?.number) banner(view.turn.seat === me.seat ? "Your turn" : "Their turn", impactAt);
@@ -182,6 +184,14 @@ function splash(at: { x: number; y: number }, color: string): void {
 function healthChange(hero: string, before: number, after: number, delay: number): void {
 	if (after >= before) return;
 	floatText(stageRect($(`${hero} .portrait`)), `-${before - after}`, "damage", delay);
+}
+
+/** A shield step breaking: the counter blinks and "-25%" floats off it. */
+function shieldChange(sel: string, before: number, after: number, delay: number): void {
+	if (after >= before) return;
+	const el = $(sel);
+	floatText(stageRect(el), `-${before - after}%`, "shield", delay);
+	el.parentElement!.animate([{ opacity: 1 }, { opacity: 0.2 }, { opacity: 1 }, { opacity: 0.2 }, { opacity: 1 }], { duration: 500, delay, easing: "steps(5)" });
 }
 
 /** Small "+N" next to an essence counter. */

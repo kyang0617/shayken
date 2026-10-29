@@ -4,11 +4,11 @@
 //
 // Every action re-checks legality itself. Never assume the client only sends legal moves.
 
-import { brewDamage } from "../shared/brew";
+import { brewDamage, damageAfterShield } from "../shared/brew";
 import { CARDS, type CardDef, type CardInstance, type Effect } from "../shared/cards";
 import { STARTER_DECK } from "../shared/decks";
 import type { ErrorCode, Seat } from "../shared/protocol";
-import { ESSENCE_PER_TURN, HAND_SIZE, STARTING_HEALTH } from "../shared/rules";
+import { ESSENCE_PER_TURN, HAND_SIZE, SHIELD_STEPS, STARTING_HEALTH } from "../shared/rules";
 import { randomInt, shuffle } from "./random";
 import type { PlayerState, RoomState } from "./state";
 
@@ -20,7 +20,7 @@ const fail = (code: ErrorCode, message: string): ActionResult => ({ ok: false, c
 export const otherSeat = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
 
 export function newPlayer(token: string): PlayerState {
-	return { token, health: STARTING_HEALTH, essence: 0, deck: [], hand: [], discard: [], brew: [], powers: [] };
+	return { token, health: STARTING_HEALTH, essence: 0, shield: SHIELD_STEPS[0], deck: [], hand: [], discard: [], brew: [], powers: [] };
 }
 
 /** Both seats are filled: shuffle each deck, flip for who goes first, start turn 1. */
@@ -70,10 +70,16 @@ export function endTurn(room: RoomState, seat: Seat, turnMs: number, now: number
 
 	if (throwBrew) {
 		if (player.brew.length === 0) return fail("EMPTY_BREW", "Your brew is empty");
-		const damage = brewDamage(player.brew);
+		const raw = brewDamage(player.brew);
 		const target = room.players[otherSeat(seat)]!;
+		// The shield in place when the throw lands softens it, *then* drops a step: first hit
+		// halved, second quartered, third full. Only a damaging throw breaks a step, or a free
+		// 0-damage brew could strip shields. (`?? 0`: rooms saved before shields existed.)
+		const shield = target.shield ?? 0;
+		const damage = damageAfterShield(raw, shield);
+		if (raw > 0) target.shield = nextShieldStep(shield);
 		target.health = Math.max(0, target.health - damage);
-		room.lastThrow = { seat, turn: room.turn!.number, cards: player.brew, damage };
+		room.lastThrow = { seat, turn: room.turn!.number, cards: player.brew, damage, blocked: raw - damage };
 		// Thrown ingredients go to the discard pile, so they come back when the deck reshuffles.
 		player.discard.push(...player.brew);
 		player.brew = [];
@@ -97,6 +103,11 @@ export function concede(room: RoomState, seat: Seat): ActionResult {
 }
 
 // ---- Internals ----
+
+/** The next shield step down; stays at the last step (no shield) once there. */
+function nextShieldStep(shield: number): number {
+	return SHIELD_STEPS[SHIELD_STEPS.indexOf(shield) + 1] ?? SHIELD_STEPS[SHIELD_STEPS.length - 1];
+}
 
 function finish(room: RoomState, winner: Seat): void {
 	room.status = "finished";

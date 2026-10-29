@@ -260,6 +260,15 @@ input::placeholder {
 .icon.essence {
 	background-image: url(/sprites/essence.png);
 }
+.icon.shield {
+	background-image: url(/sprites/shield.png);
+}
+.stat.shield {
+	color: #c8d4f0;
+}
+.stat.shield.broken {
+	opacity: 0.4;
+}
 .conn {
 	color: #e06a5a;
 }
@@ -715,4 +724,8 @@ input::placeholder {
 	color: var(--gold);
 	text-shadow: 2px 2px var(--ink);
 	background: linear-gradient(90deg, transparent, rgb(20 12 26 / 0.9) 25%, rgb(20 12 26 / 0.9) 75%, transparent);
+}
+.float.shield {
+	font-size: 8px;
+	color: #c8d4f0;
 }

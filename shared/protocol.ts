@@ -77,13 +77,16 @@ export interface ThrowRecord {
 	seat: Seat; // who threw
 	turn: number;
 	cards: CardInstance[];
-	damage: number;
+	damage: number; // what the target actually lost, after their shield
+	blocked: number; // how much the shield stopped
 }
 
 /** What both players can see about a player. Deck order and hand contents are never here. */
 export interface PublicPlayerView {
 	health: number;
 	essence: number;
+	/** Spell shield: percent of throw damage blocked (see SHIELD_STEPS). */
+	shield: number;
 	deckCount: number;
 	discardCount: number;
 	brew: CardInstance[];

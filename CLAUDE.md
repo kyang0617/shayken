@@ -7,7 +7,7 @@ when making changes — the owner wants to understand the code, not just have it
 ## Game design
 
 **Decided** (implemented in `src/rules.ts`, numbers in `shared/rules.ts`):
-- Quick (~10 min) 1v1 matches. 20 health each; reduce the opponent to 0 to win, or they concede.
+- Quick (~10 min) 1v1 matches. 40 health each; reduce the opponent to 0 to win, or they concede.
 - 20-card fixed starter deck (same for both players). First player is a server-side coin flip.
 - Turns have no sub-phases: at turn start you draw 5 and gain 3 essence, then play any cards
   you can afford, then end your turn (or the 60s timer ends it). Spire-style hand: unplayed
@@ -30,9 +30,24 @@ when making changes — the owner wants to understand the code, not just have it
   client to preview — never reimplement it. Brew arrays must stay in insertion order.
 - **Holding a brew is rewarded only by catalyst cards** (e.g. Distillate: +1 per ingredient;
   Philosopher's Salt: ×2), not by a built-in size bonus.
+- **Spell shield:** each wizard starts with a shield blocking 50% of throw damage. Each throw
+  that deals damage is softened by the current step, then drops it: 50% → 25% → 0%
+  (`SHIELD_STEPS`). Damage after the shield rounds up (a hit deals at least 1). A 0-damage
+  throw doesn't break a step. One implementation: `shared/brew.ts` `damageAfterShield`.
+  Purpose: no first combo is a guaranteed kill (going second or drawing badly still gets you
+  turns), and small early throws are worth something because they strip a step.
+- **Design intent:** quick, high-impact combos. Big combos landing in later turns is fine and
+  intended (it follows from essence accumulating); losing early to a big combo is what we avoid.
 
-**Undecided — do not invent without asking:** defense/blocking, any damage outside throwing,
-disruption of the opponent's brew, card numbers/balance, tiers, deckbuilding. Card
+**Agreed direction, not yet implemented (confirm the exact cards before building):**
+high-power attacks, skills *and* disruption, built around "bank vs burst": anything you bank
+(brew, essence) is a target, so you either build up over turns or burst in one turn. A
+**Volatile** keyword (the ingredient explodes on you if still in your brew at the start of your
+next turn) pushes the biggest payoffs into single-turn combos. No shield-focused cards for now.
+
+**Undecided — do not invent without asking:** defense/blocking cards (wards, etc.; the spell
+shield is the only mitigation so far), any damage outside throwing, the exact disruption cards,
+card numbers/balance, tiers, deckbuilding, first-player compensation. Card
 definitions and numbers are placeholders.
 
 ## Architecture rules (decided — follow these)

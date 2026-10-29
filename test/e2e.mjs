@@ -87,7 +87,8 @@ const active = first === 0 ? p0 : p1, idle = first === 0 ? p1 : p0;
 
 check(view(active).turn.number === 1 && view(active).turn.msLeft > 0, "match starts on turn 1 with a running timer");
 check(view(active).you.hand.length === 5 && view(active).you.essence === 3, "first player drew 5 and has 3 essence");
-check(view(idle).you.hand.length === 0 && view(idle).you.health === 20, "other player waits with no hand, 20 health");
+check(view(idle).you.hand.length === 0 && view(idle).you.health === 40, "other player waits with no hand, 40 health");
+check(view(active).you.shield === 50 && view(active).opponent.shield === 50, "both start with a 50% spell shield");
 
 const someIid = view(active).you.hand[0].iid;
 check((await act(idle, { type: "endTurn" })).code === "NOT_YOUR_TURN", "inactive player can't end the turn");
@@ -127,11 +128,14 @@ if (brewed === 0) {
   const thrown = await act(idle, { type: "endTurn", throw: true });
   const t = thrown.view.lastThrow;
   check(t && t.seat === view(idle).you.seat && t.cards.length === brewed, "throw is recorded with its ingredients");
-  check(thrown.view.opponent.health === 20 - t.damage, `opponent loses exactly the thrown damage (${t.damage})`);
+  check(thrown.view.opponent.health === 40 - t.damage, `opponent loses exactly the damage dealt (${t.damage})`);
+  // The first hit is halved (rounded up) and breaks a step; a 0-damage brew leaves the shield alone.
+  const raw = t.damage + t.blocked;
+  check(t.damage === Math.ceil(raw / 2) && thrown.view.opponent.shield === (raw > 0 ? 25 : 50), `shield halved the first hit (${raw} -> ${t.damage}) and dropped a step`);
   check(thrown.view.you.brew.length === 0 && thrown.view.you.discardCount >= discardBefore + brewed, "thrown brew empties into the discard pile");
   check(thrown.view.turn.seat === first, "throwing also ends the turn");
   await active.until((c) => view(c).lastThrow !== null);
-  check(view(active).you.health === 20 - t.damage && view(active).lastThrow.damage === t.damage, "target sees the hit and the throw record");
+  check(view(active).you.health === 40 - t.damage && view(active).lastThrow.damage === t.damage, "target sees the hit and the throw record");
 }
 
 // Concede off-turn: if the throw happened it's the first player's turn again; either way the
