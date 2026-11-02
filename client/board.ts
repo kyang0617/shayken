@@ -4,7 +4,7 @@
 
 import { brewDamage, damageAfterShield } from "../shared/brew";
 import { CARDS, type CardId, type CardInstance } from "../shared/cards";
-import type { PlayerView } from "../shared/protocol";
+import type { PlayerView, PublicPlayerView } from "../shared/protocol";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -86,6 +86,9 @@ export function renderBoard(view: PlayerView): void {
 	place($("opp-brew"), opp?.brew ?? []);
 	place($("opp-powers"), opp?.powers ?? []);
 	$("opp-brew-dmg").textContent = opp?.brew.length ? damageLabel(brewDamage(opp.brew), me.shield) : "";
+	const oppTurn = view.status === "playing" && !!opp && !myTurn;
+	renderHexes("opp-hexes", opp, oppTurn);
+	renderFuse("opp", opp, oppTurn, view);
 
 	// You
 	$("my-health").textContent = String(me.health);
@@ -100,25 +103,67 @@ export function renderBoard(view: PlayerView): void {
 	const myBrewDamage = brewDamage(me.brew);
 	const oppShield = opp?.shield ?? 0;
 	$("my-brew-dmg").textContent = me.brew.length ? damageLabel(myBrewDamage, oppShield) : "";
+	renderHexes("my-hexes", me, myTurn);
+	renderFuse("my", me, myTurn, view);
 	// Highlighting playable cards is only a convenience; the server checks every play anyway.
-	place($("hand"), me.hand, (c) => myTurn && CARDS[c.cardId].cost <= me.essence);
+	// Same for the cost: a cost hex raises every card's price this turn.
+	const cost = (c: CardInstance) => CARDS[c.cardId].cost + me.hexes.costUp;
+	place($("hand"), me.hand, (c) => myTurn && cost(c) <= me.essence);
+	for (const c of me.hand) {
+		const el = cardEls.get(c.iid)!;
+		el.querySelector(".cost")!.textContent = String(cost(c));
+		el.classList.toggle("taxed", me.hexes.costUp > 0);
+	}
 
 	const endTurnBtn = $<HTMLButtonElement>("end-turn-btn");
 	const throwBtn = $<HTMLButtonElement>("throw-btn");
 	endTurnBtn.disabled = !myTurn;
-	throwBtn.disabled = !myTurn || me.brew.length === 0;
-	throwBtn.textContent = me.brew.length ? `Throw (${damageAfterShield(myBrewDamage, oppShield)})` : "Throw";
+	throwBtn.disabled = !myTurn || me.brew.length === 0 || me.hexes.sealed;
+	throwBtn.textContent = me.hexes.sealed ? "Sealed" : me.brew.length ? `Throw (${damageAfterShield(myBrewDamage, oppShield)})` : "Throw";
 
-	const t = view.lastThrow;
-	$("last-throw").textContent = t
-		? `${t.seat === me.seat ? "You" : "Opponent"} threw ${t.cards.length} ingredient${t.cards.length === 1 ? "" : "s"} for ${t.damage} damage${t.blocked ? ` (${t.blocked} blocked)` : ""}.`
-		: "";
+	$("last-throw").textContent = lastEvent(view);
 
 	// Forget elements for cards no longer on the board (discarded, drawn back later as the
 	// same iid would simply get a fresh element).
 	const onBoard = new Set([...me.hand, ...me.brew, ...me.powers, ...(opp?.brew ?? []), ...(opp?.powers ?? [])].map((c) => c.iid));
 	for (const [iid, el] of cardEls) if (!onBoard.has(iid)) { el.remove(); cardEls.delete(iid); }
 	if (!preview.hidden && ![...cardEls.values()].some((el) => el.matches(":hover"))) hidePreview();
+}
+
+/** The most recent throw or explosion, in words. */
+function lastEvent(view: PlayerView): string {
+	const t = view.lastThrow, x = view.lastExplosion;
+	const who = (seat: number) => (seat === view.you.seat ? "You" : "Opponent");
+	// An explosion happens at the start of a turn, so on the same turn it came before any throw.
+	if (x && (!t || x.turn > t.turn)) return `${x.seat === view.you.seat ? "Your" : "Opponent's"} Volatile brew exploded for ${x.damage} damage!`;
+	if (!t) return "";
+	return `${who(t.seat)} threw ${t.cards.length} ingredient${t.cards.length === 1 ? "" : "s"} for ${t.damage} damage${t.blocked ? ` (${t.blocked} blocked)` : ""}.`;
+}
+
+/**
+ * Hex tags under a hero: the ones in effect during their turn, otherwise the ones queued for
+ * their next turn (prefixed "next").
+ */
+function renderHexes(id: string, p: PublicPlayerView | null, active: boolean): void {
+	const el = $(id);
+	if (!p) return void (el.textContent = "");
+	const h = active ? p.hexes : p.nextHexes;
+	const tags = [
+		h.costUp ? `+${h.costUp} cost` : "",
+		h.drawLimit !== null ? `draw ${h.drawLimit}` : "",
+		h.sealed ? "sealed" : "",
+	].filter(Boolean);
+	el.textContent = tags.length ? `${active ? "" : "next: "}${tags.join(", ")}` : "";
+	el.title = tags.length ? `Hexed ${active ? "this" : "next"} turn: ${tags.join(", ")}` : "";
+}
+
+/** The Volatile warning on a cauldron, phrased by how long its owner has left. */
+function renderFuse(side: "my" | "opp", p: PublicPlayerView | null, ownersTurn: boolean, view: PlayerView): void {
+	const el = $(`${side}-fuse`);
+	const at = p?.explodesOnTurn ?? null;
+	const now = view.turn?.number ?? 0;
+	el.closest(".cauldron-zone")!.classList.toggle("volatile", at !== null);
+	el.textContent = at === null ? "" : ownersTurn ? "Volatile! Throw now" : at - now <= 1 ? "Volatile! About to blow" : "Volatile! Throw next turn";
 }
 
 /** "12 dmg", or "12 > 6 dmg" when a shield would block some of it. */
