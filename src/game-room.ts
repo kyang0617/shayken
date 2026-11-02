@@ -9,7 +9,7 @@ import {
 	type ServerMessage,
 } from "../shared/protocol";
 import { randomToken } from "./random";
-import { concede, endTurn, newPlayer, otherSeat, playCard, startMatch, type ActionResult } from "./rules";
+import { concede, endTurn, newPlayer, noHexes, otherSeat, playCard, startMatch, type ActionResult } from "./rules";
 import type { PlayerState, RoomState } from "./state";
 
 // What we attach to each WebSocket. Attachments survive hibernation; instance fields don't.
@@ -281,6 +281,7 @@ export class GameRoom extends DurableObject<Env> {
 			},
 			winner: room.winner,
 			lastThrow: room.lastThrow ?? null, // ?? for rooms saved before throwing existed
+			lastExplosion: room.lastExplosion ?? null,
 			you: { ...publicView(me), seat, hand: me.hand },
 			opponent: opp && {
 				...publicView(opp),
@@ -335,6 +336,10 @@ function publicView(p: PlayerState): PublicPlayerView {
 		discardCount: p.discard.length,
 		brew: p.brew,
 		powers: p.powers,
+		// Public on purpose: hexes and Volatile come from cards the opponent played openly.
+		nextHexes: p.nextHexes ?? noHexes(), // ?? for rooms saved before hexes existed
+		hexes: p.hexes ?? noHexes(),
+		explodesOnTurn: p.explodesOnTurn ?? null,
 	};
 }
 

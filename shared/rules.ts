@@ -13,3 +13,11 @@ export const SHIELD_STEPS: readonly number[] = [50, 25, 0];
 export const HAND_SIZE = 5;
 /** Essence gained at the start of each turn. Unspent essence carries over; there is no cap. */
 export const ESSENCE_PER_TURN = 3;
+/**
+ * Volatile: a brew made Volatile (Unstable Fumes) explodes on its owner if it's still in their
+ * cauldron at the start of their turn after next, i.e. they get one turn to throw it. The
+ * explosion deals this percentage of the brew's throw damage to the owner.
+ */
+export const VOLATILE_PERCENT = 50;
+/** Turns from when a brew is made Volatile to its explosion (counting both players' turns). */
+export const VOLATILE_FUSE_TURNS = 3;

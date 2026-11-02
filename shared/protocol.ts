@@ -44,7 +44,8 @@ export type ErrorCode =
 	| "NOT_YOUR_TURN"
 	| "CARD_NOT_IN_HAND"
 	| "NOT_ENOUGH_ESSENCE"
-	| "EMPTY_BREW";
+	| "EMPTY_BREW"
+	| "THROW_SEALED";
 
 export type ServerMessage =
 	/** Sent once when you take or reclaim a seat. Keep `token` secret — it is your identity. */
@@ -69,6 +70,8 @@ export interface PlayerView {
 	winner: Seat | null;
 	/** The most recent throw in this match, so clients can show what just happened. */
 	lastThrow: ThrowRecord | null;
+	/** The most recent Volatile explosion in this match. */
+	lastExplosion: ExplosionRecord | null;
 	you: PublicPlayerView & { seat: Seat; hand: CardInstance[] };
 	opponent: (PublicPlayerView & { connected: boolean; handCount: number }) | null;
 }
@@ -81,6 +84,24 @@ export interface ThrowRecord {
 	blocked: number; // how much the shield stopped
 }
 
+/** A Volatile brew that blew up in its owner's face at the start of their turn. */
+export interface ExplosionRecord {
+	seat: Seat; // whose brew exploded (and who took the damage)
+	turn: number;
+	cards: CardInstance[];
+	damage: number;
+}
+
+/**
+ * Penalties the opponent put on one of your turns (Bitter Draught, Fog, Seal...). Played cards
+ * are public, so both players see these.
+ */
+export interface Hexes {
+	costUp: number; // every card costs this much more
+	drawLimit: number | null; // draw at most this many at turn start
+	sealed: boolean; // can't throw
+}
+
 /** What both players can see about a player. Deck order and hand contents are never here. */
 export interface PublicPlayerView {
 	health: number;
@@ -91,6 +112,12 @@ export interface PublicPlayerView {
 	discardCount: number;
 	brew: CardInstance[];
 	powers: CardInstance[];
+	/** Hexes waiting for this player's next turn. */
+	nextHexes: Hexes;
+	/** Hexes in effect right now (only during this player's turn). */
+	hexes: Hexes;
+	/** Turn number at whose start this player's Volatile brew explodes, or null if it isn't Volatile. */
+	explodesOnTurn: number | null;
 }
 
 /** WebSocket close codes we send (4000-4999 is reserved for applications). */

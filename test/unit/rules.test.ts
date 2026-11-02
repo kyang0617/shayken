@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import type { CardId, CardInstance } from "../../shared/cards";
-import { brewDamage, damageAfterShield } from "../../shared/brew";
+import { brewDamage, damageAfterShield, explosionDamage } from "../../shared/brew";
 import { DECK_SIZE, STARTER_DECK } from "../../shared/decks";
 import { ESSENCE_PER_TURN, HAND_SIZE, SHIELD_STEPS, STARTING_HEALTH } from "../../shared/rules";
 import { concede, endTurn, newPlayer, playCard, startMatch } from "../../src/rules";
@@ -14,6 +14,7 @@ const NOW = 1_000_000;
 
 let nextIid = 0;
 const card = (cardId: CardId): CardInstance => ({ iid: `t${nextIid++}`, cardId });
+const ids = (cards: CardInstance[]) => cards.map((c) => c.cardId);
 
 function newRoom(): RoomState {
 	return {
@@ -377,4 +378,191 @@ describe("spell shield", () => {
 		expect(room.players[1]!.health).toBe(0);
 		expect(room).toMatchObject({ status: "finished", winner: 0 });
 	});
+});
+
+describe("disruption", () => {
+	/**
+	 * Seat 0 is active on turn 1 holding `hand`, with plenty of essence; seat 1 has a brew and
+	 * essence to hit. Both decks are stocked so turns can pass.
+	 */
+	function setup(hand: CardId[], oppBrew: CardId[] = []): RoomState {
+		const room = roomWithHand(hand, 20, Array.from({ length: 20 }, () => "fire_salt" as CardId));
+		const opp = room.players[1]!;
+		opp.brew = oppBrew.map(card);
+		opp.deck = Array.from({ length: 20 }, () => card("fire_salt"));
+		opp.essence = 5;
+		return room;
+	}
+	const playFirst = (room: RoomState) => playCard(room, 0, room.players[0]!.hand[0].iid);
+
+	it("Curdle discards the first ingredient of the opponent's brew into their discard pile", () => {
+		const room = setup(["curdle"], ["fire_salt", "nightshade", "philosophers_salt"]);
+		expect(playFirst(room)).toEqual({ ok: true });
+		expect(ids(room.players[1]!.brew)).toEqual(["nightshade", "philosophers_salt"]);
+		expect(ids(room.players[1]!.discard)).toEqual(["fire_salt"]);
+	});
+
+	it("disruption with nothing to hit is still playable and does nothing", () => {
+		const room = setup(["curdle"]);
+		expect(playFirst(room)).toEqual({ ok: true });
+		expect(room.players[1]!.discard).toEqual([]);
+	});
+
+	it("Sludge Flask adds a Sludge token that subtracts 3 from the running total, never below 0", () => {
+		const room = setup(["sludge_flask"], ["wyrm_bile"]);
+		playFirst(room);
+		const brew = room.players[1]!.brew;
+		expect(ids(brew)).toEqual(["wyrm_bile", "sludge"]);
+		expect(brewDamage(brew)).toBe(2);
+		// Order matters: a ×2 added after the Sludge doubles the reduced total.
+		expect(brewDamage([card("wyrm_bile"), card("sludge"), card("philosophers_salt")])).toBe(4);
+		expect(brewDamage([card("sludge"), card("fire_salt")])).toBe(2); // 0 - 3 -> 0, + 2
+	});
+
+	it("token iids are unique across the match", () => {
+		const room = setup(["sludge_flask", "sludge_flask"]);
+		playFirst(room);
+		playFirst(room);
+		const [a, b] = room.players[1]!.brew;
+		expect(a.iid).not.toBe(b.iid);
+	});
+
+	it("tokens vanish instead of going to the discard pile, whether thrown or curdled", () => {
+		const room = setup([]);
+		room.turn!.seat = 1;
+		room.players[1]!.brew = [card("sludge"), card("wyrm_bile")];
+		endTurn(room, 1, TURN_MS, NOW, true);
+		expect(ids(room.players[1]!.discard)).toEqual(["wyrm_bile"]);
+
+		const curdled = setup(["curdle"], ["sludge"]);
+		playFirst(curdled);
+		expect(curdled.players[1]!.brew).toEqual([]);
+		expect(curdled.players[1]!.discard).toEqual([]);
+	});
+
+	it("Siphon drains 2 essence, never below 0", () => {
+		const room = setup(["siphon", "siphon", "siphon"]);
+		playFirst(room);
+		expect(room.players[1]!.essence).toBe(3);
+		playFirst(room);
+		playFirst(room);
+		expect(room.players[1]!.essence).toBe(0);
+	});
+
+	it("Bitter Draught raises the opponent's costs by 2 for their next turn only", () => {
+		const room = setup(["bitter_draught"]);
+		playFirst(room);
+		endTurn(room, 0, TURN_MS, NOW);
+		const opp = room.players[1]!;
+		expect(opp.hexes!.costUp).toBe(2);
+		opp.hand = [card("nightshade")]; // costs 2 -> 4
+		opp.essence = 3;
+		expect(playCard(room, 1, opp.hand[0].iid)).toMatchObject({ ok: false, code: "NOT_ENOUGH_ESSENCE" });
+		opp.essence = 4;
+		expect(playCard(room, 1, opp.hand[0].iid)).toEqual({ ok: true });
+		expect(opp.essence).toBe(0);
+		endTurn(room, 1, TURN_MS, NOW);
+		expect(opp.hexes).toEqual({ costUp: 0, drawLimit: null, sealed: false });
+	});
+
+	it("a hex never affects the caster or the turn it was played in", () => {
+		const room = setup(["bitter_draught", "nightshade"]);
+		playFirst(room);
+		const before = room.players[0]!.essence;
+		playFirst(room);
+		expect(room.players[0]!.essence).toBe(before - 2);
+		expect(room.players[1]!.hexes!.costUp).toBe(0); // queued, not active yet
+		expect(room.players[1]!.nextHexes!.costUp).toBe(2);
+	});
+
+	it("Fog limits the opponent's next draw to 2 cards", () => {
+		const room = setup(["fog"]);
+		playFirst(room);
+		endTurn(room, 0, TURN_MS, NOW);
+		expect(room.players[1]!.hand).toHaveLength(2);
+	});
+
+	it("Seal stops the opponent throwing on their next turn, but they can still hold", () => {
+		const room = setup(["seal"], ["wyrm_bile"]);
+		playFirst(room);
+		endTurn(room, 0, TURN_MS, NOW);
+		expect(endTurn(room, 1, TURN_MS, NOW, true)).toMatchObject({ ok: false, code: "THROW_SEALED" });
+		expect(room.players[1]!.brew).toHaveLength(1);
+		expect(endTurn(room, 1, TURN_MS, NOW)).toEqual({ ok: true });
+		expect(room.players[1]!.hexes!.sealed).toBe(false);
+	});
+
+	it("Choking Smoke deals its damage when thrown and hexes the opponent's next turn", () => {
+		const room = setup([]);
+		room.players[0]!.brew = [card("choking_smoke")];
+		room.players[1]!.shield = 0;
+		endTurn(room, 0, TURN_MS, NOW, true);
+		expect(room.players[1]!.health).toBe(STARTING_HEALTH - 3);
+		expect(room.players[1]!.hexes!.costUp).toBe(1); // their turn has started
+	});
+});
+
+describe("volatile brews", () => {
+	/** Seat 0 plays Unstable Fumes on turn 1 at seat 1, whose brew is `oppBrew`. */
+	function fumed(oppBrew: CardId[]): RoomState {
+		const room = roomWithHand(["unstable_fumes"], 5, Array.from({ length: 20 }, () => "fire_salt" as CardId));
+		const opp = room.players[1]!;
+		opp.brew = oppBrew.map(card);
+		opp.deck = Array.from({ length: 20 }, () => card("fire_salt"));
+		playCard(room, 0, room.players[0]!.hand[0].iid);
+		return room;
+	}
+
+	it("explosionDamage is half the brew's throw damage, rounded up", () => {
+		expect(explosionDamage([card("wyrm_bile")])).toBe(3); // 5 / 2 -> 3
+		expect(explosionDamage([card("wyrm_bile"), card("phoenix_feather"), card("philosophers_salt")])).toBe(10);
+		expect(explosionDamage([])).toBe(0);
+	});
+
+	it("the fuse runs out at the start of the target's turn after next", () => {
+		const room = fumed(["wyrm_bile", "phoenix_feather"]); // 10 damage
+		expect(room.players[1]!.explodesOnTurn).toBe(4);
+		endTurn(room, 0, TURN_MS, NOW); // turn 2: seat 1 holds
+		endTurn(room, 1, TURN_MS, NOW);
+		expect(room.players[1]!.brew).toHaveLength(2); // turn 3: still there
+		endTurn(room, 0, TURN_MS, NOW); // turn 4 starts: boom
+		const opp = room.players[1]!;
+		expect(opp.health).toBe(STARTING_HEALTH - 5); // half of 10; the 50% shield doesn't apply
+		expect(opp.shield).toBe(50); // and doesn't break
+		expect(opp.brew).toEqual([]);
+		expect(ids(opp.discard)).toContain("wyrm_bile");
+		expect(opp.explodesOnTurn).toBe(null);
+		expect(room.lastExplosion).toMatchObject({ seat: 1, turn: 4, damage: 5 });
+		expect(room.turn).toMatchObject({ seat: 1, number: 4 });
+	});
+
+	it("throwing on the next turn defuses it", () => {
+		const room = fumed(["wyrm_bile"]);
+		endTurn(room, 0, TURN_MS, NOW);
+		endTurn(room, 1, TURN_MS, NOW, true);
+		expect(room.players[1]!.explodesOnTurn).toBe(null);
+		room.players[1]!.brew = [card("fire_salt")]; // a new brew is stable
+		endTurn(room, 0, TURN_MS, NOW);
+		expect(room.lastExplosion).toBeUndefined();
+	});
+
+	it("an empty cauldron when the fuse runs out does nothing", () => {
+		const room = fumed([]);
+		endTurn(room, 0, TURN_MS, NOW);
+		endTurn(room, 1, TURN_MS, NOW);
+		endTurn(room, 0, TURN_MS, NOW);
+		expect(room.lastExplosion).toBeUndefined();
+		expect(room.players[1]!.health).toBe(STARTING_HEALTH);
+	});
+
+	it("a lethal explosion ends the match in the other player's favour", () => {
+		const room = fumed(["wyrm_bile"]);
+		room.players[1]!.health = 2;
+		endTurn(room, 0, TURN_MS, NOW);
+		endTurn(room, 1, TURN_MS, NOW);
+		endTurn(room, 0, TURN_MS, NOW);
+		expect(room).toMatchObject({ status: "finished", winner: 0, turn: null });
+		expect(room.players[1]!.health).toBe(0);
+	});
+
 });
