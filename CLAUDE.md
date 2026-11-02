@@ -8,7 +8,8 @@ when making changes — the owner wants to understand the code, not just have it
 
 **Decided** (implemented in `src/rules.ts`, numbers in `shared/rules.ts`):
 - Quick (~10 min) 1v1 matches. 40 health each; reduce the opponent to 0 to win, or they concede.
-- 20-card fixed starter deck (same for both players). First player is a server-side coin flip.
+- Fixed starter deck, same for both players: 28 cards for now (every card goes in until
+  deckbuilding exists; the plan is 20). First player is a server-side coin flip.
 - Turns have no sub-phases: at turn start you draw 5 and gain 3 essence, then play any cards
   you can afford, then end your turn (or the 60s timer ends it). Spire-style hand: unplayed
   cards are discarded at end of turn; when the deck runs out, the discard pile is reshuffled.
@@ -39,15 +40,28 @@ when making changes — the owner wants to understand the code, not just have it
 - **Design intent:** quick, high-impact combos. Big combos landing in later turns is fine and
   intended (it follows from essence accumulating); losing early to a big combo is what we avoid.
 
-**Agreed direction, not yet implemented (confirm the exact cards before building):**
-high-power attacks, skills *and* disruption, built around "bank vs burst": anything you bank
-(brew, essence) is a target, so you either build up over turns or burst in one turn. A
-**Volatile** keyword (the ingredient explodes on you if still in your brew at the start of your
-next turn) pushes the biggest payoffs into single-turn combos. No shield-focused cards for now.
+- **Disruption: "bank vs burst."** Anything you bank (brew, essence) is a target, so you
+  either build up over turns or burst in one turn. Two kinds of counter (`Disruption` effects
+  in `shared/cards.ts`, usable on play or on throw), with targets picked by position
+  ("first ingredient"), never chosen by the player:
+  - *Against banking:* cheap (0–1) and modest, since holding is strongest early, when essence
+    is scarce: Curdle, Sludge Flask, Siphon, Unstable Fumes.
+  - *Against bursting:* expensive (4–5) and powerful, since bursts need banked essence, so they
+    come later, when every turn matters: Bitter Draught, Fog, Seal, Choking Smoke.
+- **Hexes:** penalties on the opponent's *next* turn only (cost up, draw limit, can't throw).
+  Queued in `nextHexes`, active in `hexes` during that turn, cleared when it ends. Public.
+- **Volatile:** a brew made Volatile (Unstable Fumes) explodes at the start of its owner's turn
+  after next (they get one turn to throw it) for half its throw damage, rounded up
+  (`explosionDamage`). Shields don't apply and don't break. Throwing defuses it.
+- **Tokens** (e.g. Sludge): cards created by other cards, never in a deck; they vanish when
+  they leave the brew instead of going to the discard pile.
+- No shield-focused cards for now. More Volatile cards (big payoffs that must be thrown the
+  turn they're added) are agreed in direction; confirm the exact cards before building.
 
 **Undecided — do not invent without asking:** defense/blocking cards (wards, etc.; the spell
-shield is the only mitigation so far), any damage outside throwing, the exact disruption cards,
-card numbers/balance, tiers, deckbuilding, first-player compensation. Card
+shield is the only mitigation so far), damage outside throwing other than Volatile explosions,
+whether the spell shield stays (revisit after playtesting with disruption; `SHIELD_STEPS = [0]`
+turns it off), card numbers/balance, tiers, deckbuilding, first-player compensation. Card
 definitions and numbers are placeholders.
 
 ## Architecture rules (decided — follow these)
