@@ -2,7 +2,7 @@
 // filtered PlayerView (see viewFor in game-room.ts).
 
 import type { CardInstance } from "../shared/cards";
-import type { Seat, ThrowRecord } from "../shared/protocol";
+import type { ExplosionRecord, Hexes, Seat, ThrowRecord } from "../shared/protocol";
 
 export interface PlayerState {
 	token: string;
@@ -14,6 +14,13 @@ export interface PlayerState {
 	discard: CardInstance[];
 	brew: CardInstance[]; // ingredients waiting to be thrown; emptied into discard on throw
 	powers: CardInstance[]; // active for the rest of the match
+	// Hexes are put on you by the opponent for your *next* turn (`nextHexes`). When that turn
+	// starts they move to `hexes`, which the rules check while you act, and are cleared when it
+	// ends. Two fields so a hex played on you never affects the turn you're already in.
+	// Optional only because rooms saved before hexes existed don't have them.
+	nextHexes?: Hexes;
+	hexes?: Hexes;
+	explodesOnTurn?: number | null; // your brew is Volatile and explodes at the start of this turn
 }
 
 export interface TurnState {
@@ -37,6 +44,8 @@ export interface RoomState {
 	turn: TurnState | null; // non-null exactly while status is "playing"
 	winner: Seat | null;
 	lastThrow: ThrowRecord | null;
+	lastExplosion?: ExplosionRecord | null;
+	tokensMade?: number; // counter for token card iids, so every iid in the match is unique
 	reap: ReapTimer | null; // null while both players are connected
 	/**
 	 * Finished matches are deleted at this time even if both players stay connected. Set once,

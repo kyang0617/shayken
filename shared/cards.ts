@@ -11,7 +11,29 @@
 
 export type CardType = "attack" | "skill" | "power";
 
+/**
+ * Effects that hit the opponent. Allowed both when a card is played (`effects`) and when a
+ * brew is thrown (`onThrow`). Targets are picked by position ("first ingredient"), never by
+ * the player, so playing a card stays a single `playCard { iid }` with nothing extra to check.
+ */
+export type Disruption =
+	/** Discard the first/last ingredient of the opponent's brew. */
+	| { kind: "removeOpponentIngredient"; position: "first" | "last" }
+	/** Add a token card (created for the occasion, see CardDef.token) to the end of the opponent's brew. */
+	| { kind: "addToOpponentBrew"; token: TokenId }
+	| { kind: "drainEssence"; amount: number }
+	/** The opponent's brew becomes Volatile: still there at the start of their turn after next, it explodes on them. */
+	| { kind: "destabilizeBrew" }
+	// Hexes: penalties on the opponent's *next* turn (see Hexes in shared/protocol.ts).
+	| { kind: "hexCost"; amount: number }
+	| { kind: "hexDraw"; limit: number }
+	| { kind: "hexSeal" };
+
+/** Cards that only exist when another card creates them. */
+export type TokenId = "sludge";
+
 export type Effect =
+	| Disruption
 	/** This card goes into your brew instead of the discard pile. */
 	| { kind: "addToBrew" }
 	| { kind: "gainEssence"; amount: number }
@@ -27,6 +49,8 @@ export type Effect =
  * are "catalysts": they reward holding a bigger brew, and adding them late.
  */
 export type ThrowEffect =
+	| Disruption
+	/** Adds to the total; a negative amount subtracts, but the total never drops below 0. */
 	| { kind: "damage"; amount: number }
 	| { kind: "damagePerIngredient"; amount: number }
 	| { kind: "multiplyDamage"; factor: number };
@@ -41,6 +65,11 @@ export interface CardDef {
 	effects: readonly Effect[];
 	/** Resolved when a brew containing this card is thrown. */
 	onThrow?: readonly ThrowEffect[];
+	/**
+	 * Created by another card, never in a deck. Removed from the game when it leaves the brew
+	 * (thrown, exploded, or discarded) instead of going to the discard pile.
+	 */
+	token?: true;
 }
 
 const brew = { kind: "addToBrew" } as const;
@@ -71,6 +100,21 @@ export const CARDS = {
 	// ---- Powers: last the whole match ----
 	starlight_dust: { id: "starlight_dust", name: "Starlight Dust", type: "power", cost: 2, text: "Each turn: gain 1 extra essence.", effects: [{ kind: "essencePerTurn", amount: 1 }] },
 	mandrake_root: { id: "mandrake_root", name: "Mandrake Root", type: "power", cost: 3, text: "Each turn: draw 1 extra card.", effects: [{ kind: "drawPerTurn", amount: 1 }] },
+
+	// ---- Disruption against banking: cheap, modest. Punish a held brew or hoarded essence. ----
+	curdle: { id: "curdle", name: "Curdle", type: "skill", cost: 1, text: "Discard the first ingredient in the opponent's brew.", effects: [{ kind: "removeOpponentIngredient", position: "first" }] },
+	sludge_flask: { id: "sludge_flask", name: "Sludge Flask", type: "skill", cost: 1, text: "Add a Sludge (thrown: -3 damage) to the end of the opponent's brew.", effects: [{ kind: "addToOpponentBrew", token: "sludge" }] },
+	siphon: { id: "siphon", name: "Siphon", type: "skill", cost: 0, text: "The opponent loses 2 essence.", effects: [{ kind: "drainEssence", amount: 2 }] },
+	unstable_fumes: { id: "unstable_fumes", name: "Unstable Fumes", type: "skill", cost: 1, text: "The opponent's brew becomes Volatile: if it isn't thrown on their next turn, it explodes on them for half its damage.", effects: [{ kind: "destabilizeBrew" }] },
+
+	// ---- Disruption against bursting: expensive, powerful. Wreck the opponent's next turn. ----
+	bitter_draught: { id: "bitter_draught", name: "Bitter Draught", type: "skill", cost: 4, text: "Next turn, the opponent's cards cost 2 more.", effects: [{ kind: "hexCost", amount: 2 }] },
+	fog: { id: "fog", name: "Fog", type: "skill", cost: 4, text: "Next turn, the opponent draws only 2 cards.", effects: [{ kind: "hexDraw", limit: 2 }] },
+	seal: { id: "seal", name: "Seal", type: "skill", cost: 5, text: "Next turn, the opponent can't throw.", effects: [{ kind: "hexSeal" }] },
+	choking_smoke: { id: "choking_smoke", name: "Choking Smoke", type: "attack", cost: 4, text: "Thrown: 3 damage, and the opponent's cards cost 1 more next turn.", effects: [brew], onThrow: [{ kind: "damage", amount: 3 }, { kind: "hexCost", amount: 1 }] },
+
+	// ---- Tokens: created by other cards, never in a deck ----
+	sludge: { id: "sludge", name: "Sludge", type: "attack", cost: 0, text: "Thrown: -3 damage. Vanishes when it leaves the brew.", effects: [brew], onThrow: dmg(-3), token: true },
 } as const satisfies Record<string, CardDef>;
 
 export type CardId = keyof typeof CARDS;

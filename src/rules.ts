@@ -4,11 +4,11 @@
 //
 // Every action re-checks legality itself. Never assume the client only sends legal moves.
 
-import { brewDamage, damageAfterShield } from "../shared/brew";
-import { CARDS, type CardDef, type CardInstance, type Effect } from "../shared/cards";
+import { brewDamage, damageAfterShield, explosionDamage } from "../shared/brew";
+import { CARDS, type CardDef, type CardInstance, type Disruption, type Effect, type ThrowEffect } from "../shared/cards";
 import { STARTER_DECK } from "../shared/decks";
-import type { ErrorCode, Seat } from "../shared/protocol";
-import { ESSENCE_PER_TURN, HAND_SIZE, SHIELD_STEPS, STARTING_HEALTH } from "../shared/rules";
+import type { ErrorCode, Hexes, Seat } from "../shared/protocol";
+import { ESSENCE_PER_TURN, HAND_SIZE, SHIELD_STEPS, STARTING_HEALTH, VOLATILE_FUSE_TURNS } from "../shared/rules";
 import { randomInt, shuffle } from "./random";
 import type { PlayerState, RoomState } from "./state";
 
@@ -19,8 +19,13 @@ const fail = (code: ErrorCode, message: string): ActionResult => ({ ok: false, c
 
 export const otherSeat = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
 
+export const noHexes = (): Hexes => ({ costUp: 0, drawLimit: null, sealed: false });
+
 export function newPlayer(token: string): PlayerState {
-	return { token, health: STARTING_HEALTH, essence: 0, shield: SHIELD_STEPS[0], deck: [], hand: [], discard: [], brew: [], powers: [] };
+	return {
+		token, health: STARTING_HEALTH, essence: 0, shield: SHIELD_STEPS[0], deck: [], hand: [], discard: [], brew: [], powers: [],
+		nextHexes: noHexes(), hexes: noHexes(), explodesOnTurn: null,
+	};
 }
 
 /** Both seats are filled: shuffle each deck, flip for who goes first, start turn 1. */
@@ -44,12 +49,14 @@ export function playCard(room: RoomState, seat: Seat, iid: string): ActionResult
 	if (index === -1) return fail("CARD_NOT_IN_HAND", "That card is not in your hand");
 	const card = player.hand[index];
 	const def: CardDef = CARDS[card.cardId];
-	if (player.essence < def.cost) return fail("NOT_ENOUGH_ESSENCE", `${def.name} costs ${def.cost} essence`);
+	// A cost hex (Bitter Draught) raises the price of every card this turn.
+	const cost = def.cost + (player.hexes?.costUp ?? 0);
+	if (player.essence < cost) return fail("NOT_ENOUGH_ESSENCE", `${def.name} costs ${cost} essence`);
 
 	player.hand.splice(index, 1);
-	player.essence -= def.cost;
+	player.essence -= cost;
 
-	for (const effect of def.effects) resolve(player, effect);
+	for (const effect of def.effects) resolve(room, seat, effect);
 
 	// Place the card after resolving, so a "draw" that reshuffles the discard pile can't
 	// draw this same card straight back.
@@ -70,6 +77,7 @@ export function endTurn(room: RoomState, seat: Seat, turnMs: number, now: number
 
 	if (throwBrew) {
 		if (player.brew.length === 0) return fail("EMPTY_BREW", "Your brew is empty");
+		if (player.hexes?.sealed) return fail("THROW_SEALED", "Your cauldron is sealed this turn");
 		const raw = brewDamage(player.brew);
 		const target = room.players[otherSeat(seat)]!;
 		// The shield in place when the throw lands softens it, *then* drops a step: first hit
@@ -80,18 +88,22 @@ export function endTurn(room: RoomState, seat: Seat, turnMs: number, now: number
 		if (raw > 0) target.shield = nextShieldStep(shield);
 		target.health = Math.max(0, target.health - damage);
 		room.lastThrow = { seat, turn: room.turn!.number, cards: player.brew, damage, blocked: raw - damage };
-		// Thrown ingredients go to the discard pile, so they come back when the deck reshuffles.
-		player.discard.push(...player.brew);
-		player.brew = [];
 		if (target.health === 0) {
+			emptyBrew(player);
 			finish(room, seat);
 			return OK;
 		}
+		// Ingredients' disruption riders (Choking Smoke) land after the damage. Collected first
+		// because some of them change the opponent's brew, never the thrower's.
+		const riders = player.brew.flatMap((c) => (CARDS[c.cardId] as CardDef).onThrow ?? []);
+		emptyBrew(player);
+		for (const effect of riders) resolve(room, seat, effect);
 	}
 
-	// Unplayed cards are discarded; essence carries over.
+	// Unplayed cards are discarded; essence carries over. Hexes on this turn are used up.
 	player.discard.push(...player.hand);
 	player.hand = [];
+	player.hexes = noHexes();
 	startTurn(room, otherSeat(seat), room.turn!.number + 1, turnMs, now);
 	return OK;
 }
@@ -117,9 +129,40 @@ function finish(room: RoomState, winner: Seat): void {
 
 function startTurn(room: RoomState, seat: Seat, number: number, turnMs: number, now: number): void {
 	const player = room.players[seat]!;
-	player.essence += ESSENCE_PER_TURN + fromPowers(player, "essencePerTurn");
-	draw(player, HAND_SIZE + fromPowers(player, "drawPerTurn"));
 	room.turn = { seat, number, endsAt: now + turnMs };
+	// The hexes the opponent queued up now apply, for this turn only.
+	player.hexes = player.nextHexes ?? noHexes();
+	player.nextHexes = noHexes();
+	if (explode(room, seat)) return; // the explosion knocked them out
+	player.essence += ESSENCE_PER_TURN + fromPowers(player, "essencePerTurn");
+	const count = HAND_SIZE + fromPowers(player, "drawPerTurn");
+	draw(player, Math.min(count, player.hexes.drawLimit ?? count));
+}
+
+/**
+ * If `seat`'s brew is Volatile and its fuse has run out, it explodes: they take part of its
+ * damage (shields don't help) and the brew is gone. Returns true if that ended the match.
+ */
+function explode(room: RoomState, seat: Seat): boolean {
+	const player = room.players[seat]!;
+	const at = player.explodesOnTurn ?? null;
+	if (at === null || room.turn!.number < at) return false;
+	player.explodesOnTurn = null;
+	if (player.brew.length === 0) return false; // nothing left in the cauldron to blow up
+	const damage = explosionDamage(player.brew);
+	player.health = Math.max(0, player.health - damage);
+	room.lastExplosion = { seat, turn: room.turn!.number, cards: player.brew, damage };
+	emptyBrew(player);
+	if (player.health > 0) return false;
+	finish(room, otherSeat(seat));
+	return true;
+}
+
+/** The brew leaves the cauldron: real cards to the discard pile, tokens out of the game. */
+function emptyBrew(player: PlayerState): void {
+	player.discard.push(...player.brew.filter((c) => !(CARDS[c.cardId] as CardDef).token));
+	player.brew = [];
+	player.explodesOnTurn = null; // a new brew starts out stable
 }
 
 /** Returns an error result if `seat` may not act right now, otherwise null. */
@@ -129,8 +172,12 @@ function checkActive(room: RoomState, seat: Seat): ActionResult | null {
 	return null;
 }
 
-/** On-play effects. Per-turn effects are passive and read by `fromPowers` at turn start. */
-function resolve(player: PlayerState, effect: Effect): void {
+/**
+ * Effects of a card played (or a brew thrown) by `seat`. Per-turn effects are passive and read
+ * by `fromPowers` at turn start; damage is brewDamage's job.
+ */
+function resolve(room: RoomState, seat: Seat, effect: Effect | ThrowEffect): void {
+	const player = room.players[seat]!;
 	switch (effect.kind) {
 		case "gainEssence":
 			player.essence += effect.amount;
@@ -141,6 +188,47 @@ function resolve(player: PlayerState, effect: Effect): void {
 		case "addToBrew": // handled when the card is placed
 		case "essencePerTurn":
 		case "drawPerTurn":
+		case "damage":
+		case "damagePerIngredient":
+		case "multiplyDamage":
+			break;
+		default:
+			disrupt(room, otherSeat(seat), effect);
+	}
+}
+
+/** A disruption effect landing on `targetSeat`. Each one does nothing if there's nothing to hit. */
+function disrupt(room: RoomState, targetSeat: Seat, effect: Disruption): void {
+	const target = room.players[targetSeat]!;
+	const hexes = (target.nextHexes ??= noHexes());
+	switch (effect.kind) {
+		case "removeOpponentIngredient": {
+			const removed = effect.position === "first" ? target.brew.shift() : target.brew.pop();
+			if (removed && !(CARDS[removed.cardId] as CardDef).token) target.discard.push(removed);
+			break;
+		}
+		case "addToOpponentBrew":
+			room.tokensMade = (room.tokensMade ?? 0) + 1;
+			target.brew.push({ iid: `token-${room.tokensMade}`, cardId: effect.token });
+			break;
+		case "drainEssence":
+			target.essence = Math.max(0, target.essence - effect.amount);
+			break;
+		case "destabilizeBrew": {
+			// Counted from now: the target gets their next turn to throw, then it goes off. A
+			// second dose doesn't reset an already-burning fuse.
+			const at = room.turn!.number + VOLATILE_FUSE_TURNS;
+			target.explodesOnTurn = Math.min(target.explodesOnTurn ?? at, at);
+			break;
+		}
+		case "hexCost":
+			hexes.costUp += effect.amount;
+			break;
+		case "hexDraw":
+			hexes.drawLimit = Math.min(hexes.drawLimit ?? effect.limit, effect.limit);
+			break;
+		case "hexSeal":
+			hexes.sealed = true;
 			break;
 	}
 }

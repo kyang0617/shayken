@@ -2,11 +2,12 @@
 // and the client (which previews it) can never disagree about the formula.
 
 import { CARDS, type CardDef, type CardInstance } from "./cards";
+import { VOLATILE_PERCENT } from "./rules";
 
 /**
  * Ingredients resolve one at a time, in the order they were added (brew[0] first), against
  * a running total. So order matters:
- * - `damage`: adds to the total.
+ * - `damage`: adds to the total (a negative amount subtracts, never below 0).
  * - `damagePerIngredient`: adds amount × this ingredient's position (1-based), i.e. per
  *   ingredient added so far, itself included. Worth more the later it's added.
  * - `multiplyDamage`: multiplies the total so far. Ingredients added after it aren't affected.
@@ -20,7 +21,7 @@ export function brewDamage(brew: readonly CardInstance[]): number {
 		for (const effect of def.onThrow ?? []) {
 			switch (effect.kind) {
 				case "damage":
-					total += effect.amount;
+					total = Math.max(0, total + effect.amount);
 					break;
 				case "damagePerIngredient":
 					total += effect.amount * (i + 1);
@@ -41,4 +42,12 @@ export function brewDamage(brew: readonly CardInstance[]): number {
  */
 export function damageAfterShield(damage: number, shield: number): number {
 	return Math.ceil((damage * (100 - shield)) / 100);
+}
+
+/**
+ * Damage a Volatile brew deals to its own owner when it explodes: VOLATILE_PERCENT of what it
+ * would have dealt if thrown, rounded up. Spell shields don't apply (they only block throws).
+ */
+export function explosionDamage(brew: readonly CardInstance[]): number {
+	return Math.ceil((brewDamage(brew) * VOLATILE_PERCENT) / 100);
 }

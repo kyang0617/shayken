@@ -272,6 +272,14 @@ input::placeholder {
 .conn {
 	color: #e06a5a;
 }
+/* Hexes the opponent put on this player ("next: +2 cost, sealed") */
+.hexes {
+	align-self: flex-start;
+	max-width: 90px;
+	color: #d890ff;
+	font-size: 8px;
+	text-shadow: 1px 1px var(--ink);
+}
 
 /* ---- Piles (deck / discard) ---- */
 
@@ -363,6 +371,24 @@ input::placeholder {
 	bottom: 12px;
 	color: var(--gold);
 	text-shadow: 1px 1px var(--ink);
+}
+/* Volatile: the cauldron rattles and glows hot, with a warning beside it */
+.fuse {
+	position: absolute;
+	right: calc(50% + 32px);
+	bottom: 12px;
+	color: #ff8a3a;
+	text-shadow: 1px 1px var(--ink);
+	white-space: nowrap;
+}
+.cauldron-zone.volatile .cauldron {
+	--glow: rgb(255 120 40 / 0.4);
+	animation: bubble 0.45s steps(3) infinite, rattle 0.3s steps(2) infinite;
+}
+@keyframes rattle {
+	50% {
+		translate: 1px 0;
+	}
 }
 
 /* Ingredients float above the cauldron, numbered in the order they were added (order matters
@@ -508,6 +534,10 @@ input::placeholder {
 	box-shadow: inset 1px 1px #8ab0ff;
 	color: white;
 	text-shadow: 1px 1px var(--ink);
+}
+#hand .card.taxed .cost {
+	background: #a83a5a;
+	box-shadow: inset 1px 1px #ff8ab0;
 }
 #hand .card .name,
 #preview .card .name,
@@ -728,4 +758,10 @@ input::placeholder {
 .float.shield {
 	font-size: 8px;
 	color: #c8d4f0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.cauldron-zone.volatile .cauldron {
+		animation: bubble 0.9s steps(3) infinite;
+	}
 }

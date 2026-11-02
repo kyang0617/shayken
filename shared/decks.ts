@@ -1,6 +1,7 @@
 import type { CardId } from "./cards";
 
-export const DECK_SIZE = 20;
+// Over the planned 20 for now: every card goes in until deckbuilding exists.
+export const DECK_SIZE = 28;
 
 // V1: both players get the same fixed list. The server copies and shuffles it per player.
 export const STARTER_DECK: readonly CardId[] = [
@@ -21,4 +22,13 @@ export const STARTER_DECK: readonly CardId[] = [
 	"troll_moss",
 	"starlight_dust",
 	"mandrake_root",
+	// Disruption
+	"curdle",
+	"sludge_flask",
+	"siphon",
+	"unstable_fumes",
+	"bitter_draught",
+	"fog",
+	"seal",
+	"choking_smoke",
 ];

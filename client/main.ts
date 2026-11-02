@@ -135,17 +135,21 @@ function renderResult(view: PlayerView): void {
 	const won = view.winner === me.seat;
 	const loser = won ? opp : me;
 	// The server doesn't send an explicit end reason: a loser at 0 health was knocked out by
-	// the last throw; otherwise they conceded.
+	// the last throw, or by their own Volatile brew if that happened later; otherwise they conceded.
 	const knockout = loser.health === 0;
-	const t = view.lastThrow;
+	const t = view.lastThrow, x = view.lastExplosion;
+	const exploded = knockout && !!x && (!t || x.turn > t.turn);
+	const finalBrew = exploded ? x.cards : knockout && t ? t.cards : [];
 
 	$("result-title").textContent = won ? "Victory!" : "Defeat";
 	overlay.classList.toggle("won", won);
-	$("result-detail").textContent = knockout && t
+	$("result-detail").textContent = exploded
+		? `${won ? "Your opponent's" : "Your"} Volatile brew exploded for ${x.damage} damage.`
+		: knockout && t
 		? `${won ? "Your" : "Your opponent's"} ${t.cards.length}-ingredient brew hit for ${t.damage} damage.`
 		: won ? "Your opponent conceded." : "You conceded.";
 	$("result-stats").textContent = `Final health: you ${me.health}, opponent ${opp.health}`;
-	$("result-brew").replaceChildren(...(knockout && t ? t.cards.map((c) => cardFace(c.cardId)) : []));
+	$("result-brew").replaceChildren(...finalBrew.map((c) => cardFace(c.cardId)));
 	overlay.hidden = resultDismissed;
 }
 
