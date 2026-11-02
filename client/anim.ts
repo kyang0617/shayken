@@ -82,7 +82,9 @@ export function animate(snap: Snapshot, prev: PlayerView | null, view: PlayerVie
 	if (reduced() || !prev || prev.roomCode !== view.roomCode) return;
 	const me = view.you;
 	const throwNew = view.lastThrow && (view.lastThrow.turn !== prev.lastThrow?.turn || view.lastThrow.seat !== prev.lastThrow?.seat);
-	const thrown = new Set(throwNew ? view.lastThrow!.cards.map((c) => c.iid) : []);
+	const x = view.lastExplosion;
+	const explosionNew = x && (x.turn !== prev.lastExplosion?.turn || x.seat !== prev.lastExplosion?.seat);
+	const thrown = new Set([...(throwNew ? view.lastThrow!.cards : []), ...(explosionNew ? x.cards : [])].map((c) => c.iid));
 
 	// Cards on the board now.
 	let drawn = 0;
@@ -111,6 +113,9 @@ export function animate(snap: Snapshot, prev: PlayerView | null, view: PlayerVie
 			const g = ghost(el, "full", start);
 			fly(g, [{ transform: "none", transformOrigin: "0 0" }, { transform: "translate(0, 70px)", transformOrigin: "0 0", offset: 0.45 }, { transform: mapTo(start, now), transformOrigin: "0 0" }], { duration: 650 });
 			popIn(el, 650);
+		} else {
+			// Appeared out of nowhere, e.g. a Sludge token dropped into someone's brew.
+			popIn(el, 0);
 		}
 	}
 
@@ -126,6 +131,7 @@ export function animate(snap: Snapshot, prev: PlayerView | null, view: PlayerVie
 
 	let impactAt = 0;
 	if (throwNew) impactAt = throwBrew(snap, view);
+	if (explosionNew) explodeBrew(snap, view);
 	healthChange(".hero.you", prev.you.health, me.health, impactAt);
 	if (prev.opponent && view.opponent) healthChange(".hero.opp", prev.opponent.health, view.opponent.health, impactAt);
 	shieldChange("#my-shield", prev.you.shield, me.shield, impactAt);
@@ -164,6 +170,26 @@ function throwBrew(snap: Snapshot, view: PlayerView): number {
 	setTimeout(() => splash(center(to), mine ? "#79d84a" : "#b56ae8"), impactAt);
 	target.animate([{ transform: "none" }, { transform: "translateX(-3px)" }, { transform: "translateX(3px)" }, { transform: "translateX(-2px)" }, { transform: "none" }], { duration: 300, delay: impactAt, easing: "steps(5)" });
 	return impactAt;
+}
+
+/** A Volatile brew blowing up: the ingredients burst out of the cauldron. */
+function explodeBrew(snap: Snapshot, view: PlayerView): void {
+	const x = view.lastExplosion!;
+	const zone = $(x.seat === view.you.seat ? ".cauldron-zone.you" : ".cauldron-zone.opp");
+	const at = center(stageRect(zone.querySelector(".cauldron")!));
+	for (const c of x.cards) {
+		const was = snap.get(c.iid);
+		if (!was) continue;
+		const g = ghost(was.el, "icon", was.rect);
+		const dx = (Math.random() - 0.5) * 80;
+		fly(g, [
+			{ transform: "translate(0, 0) rotate(0)" },
+			{ transform: `translate(${dx}px, -30px) rotate(${dx * 6}deg)`, opacity: 0 },
+		], { duration: 500, easing: "ease-out" });
+	}
+	splash(at, "#ff8a3a");
+	splash(at, "#ffd34d");
+	zone.animate([{ transform: "none" }, { transform: "translate(-3px, 1px)" }, { transform: "translate(3px, -1px)" }, { transform: "translate(-2px, 0)" }, { transform: "none" }], { duration: 350, easing: "steps(5)" });
 }
 
 function splash(at: { x: number; y: number }, color: string): void {
