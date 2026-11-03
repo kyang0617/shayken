@@ -152,6 +152,10 @@ mkdirSync(dir, { recursive: true });
 for (const [name, { dur, make }] of Object.entries(SOUNDS)) {
 	const samples = new Float32Array(Math.ceil(dur * RATE));
 	make(samples);
+	// Noise is spiky, so instead of hand-tuning volumes until nothing clips, scale any sound
+	// that peaks too high back down.
+	const peak = samples.reduce((m, s) => Math.max(m, Math.abs(s)), 0);
+	if (peak > 0.9) samples.forEach((s, i) => (samples[i] = (s * 0.9) / peak));
 	const file = wav(samples);
 	writeFileSync(new URL(`${name}.wav`, dir), file);
 	console.log(`${(name + ".wav").padEnd(14)} ${(file.length / 1024).toFixed(1)} KB`);
