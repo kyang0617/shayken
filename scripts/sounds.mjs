@@ -73,6 +73,9 @@ function notes(out, list, opts) {
 // ---- The sounds ----
 
 const SOUNDS = {
+	// Hovering a card. Heard constantly, so it's a soft, short sine tick: no square-wave buzz,
+	// no noise, low volume, and a gentle attack so it doesn't snap.
+	hover: { dur: 0.035, make: (o) => tone(o, { wave: "sine", f0: 1900, f1: 2300, dur: 0.03, vol: 0.12, attack: 0.004 }) },
 	click: { dur: 0.04, make: (o) => tone(o, { wave: "square", f0: 900, f1: 600, dur: 0.04, vol: 0.2, duty: 0.25 }) },
 	card: { // a card slapped down
 		dur: 0.1,
