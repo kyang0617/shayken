@@ -5,6 +5,7 @@
 import { brewDamage, damageAfterShield } from "../shared/brew";
 import { CARDS, type CardId, type CardInstance } from "../shared/cards";
 import type { PlayerView, PublicPlayerView } from "../shared/protocol";
+import { hoverTick } from "./sound";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -39,7 +40,10 @@ function cardEl(card: CardInstance): HTMLElement {
 		el = cardFace(card.cardId);
 		el.dataset.iid = card.iid;
 		el.addEventListener("click", () => el!.classList.contains("playable") && onPlay(card.iid));
-		el.addEventListener("mouseenter", () => showPreview(card.cardId));
+		el.addEventListener("mouseenter", () => {
+			showPreview(card.cardId);
+			hoverTick();
+		});
 		el.addEventListener("mouseleave", hidePreview);
 		cardEls.set(card.iid, el);
 	}

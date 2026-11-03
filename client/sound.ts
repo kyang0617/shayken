@@ -10,7 +10,7 @@
 import type { PlayerView, PublicPlayerView } from "../shared/protocol";
 
 const NAMES = [
-	"click", "card", "draw", "plop", "power", "whoosh", "splash", "shield",
+	"hover", "click", "card", "draw", "plop", "power", "whoosh", "splash", "shield",
 	"explode", "fuse", "hex", "essence", "turn", "tick", "win", "lose",
 ] as const;
 export type Sound = (typeof NAMES)[number];
@@ -90,6 +90,18 @@ slider.addEventListener("input", () => {
 	settings.muted = false;
 	applyVolume();
 });
+
+/**
+ * The card-hover tick. Rate-limited, so sweeping the mouse along the hand gives a few soft
+ * ticks rather than a burst of overlapping ones.
+ */
+let lastHover = 0;
+export function hoverTick(): void {
+	const now = performance.now();
+	if (now - lastHover < 60) return;
+	lastHover = now;
+	play("hover", { vary: 0.03 });
+}
 
 // Every button clicks.
 document.addEventListener("click", (e) => {
