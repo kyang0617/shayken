@@ -13,7 +13,8 @@
 		"test": "vitest run test/unit",
 		"dev:fast": "wrangler dev --var REAP_EMPTY_SECONDS:2 --var REAP_SOLO_SECONDS:4 --var TURN_SECONDS:3 --var REAP_FINISHED_SECONDS:3",
 		"test:timers": "node test/timers.mjs",
-		"sprites": "node scripts/sprites.mjs"
+		"sprites": "node scripts/sprites.mjs",
+		"sounds": "node scripts/sounds.mjs"
 	},
 	"devDependencies": {
 		"esbuild": "^0.28.2",

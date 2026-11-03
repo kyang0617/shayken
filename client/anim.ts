@@ -77,9 +77,12 @@ function fly(g: HTMLElement, frames: Keyframe[], opts: KeyframeAnimationOptions)
 	return a.finished.then(() => g.remove(), () => g.remove());
 }
 
-/** Call after rendering `view` (with the snapshot taken before) to animate what changed. */
-export function animate(snap: Snapshot, prev: PlayerView | null, view: PlayerView): void {
-	if (reduced() || !prev || prev.roomCode !== view.roomCode) return;
+/**
+ * Call after rendering `view` (with the snapshot taken before) to animate what changed.
+ * Returns when a throw lands (ms from now; 0 if nothing is flying), so sounds can match it.
+ */
+export function animate(snap: Snapshot, prev: PlayerView | null, view: PlayerView): number {
+	if (reduced() || !prev || prev.roomCode !== view.roomCode) return 0;
 	const me = view.you;
 	const throwNew = view.lastThrow && (view.lastThrow.turn !== prev.lastThrow?.turn || view.lastThrow.seat !== prev.lastThrow?.seat);
 	const x = view.lastExplosion;
@@ -139,6 +142,7 @@ export function animate(snap: Snapshot, prev: PlayerView | null, view: PlayerVie
 	essenceChange("#my-essence", prev.you.essence, me.essence);
 	if (prev.opponent && view.opponent) essenceChange("#opp-essence", prev.opponent.essence, view.opponent.essence);
 	if (view.status === "playing" && view.turn && view.turn.number !== prev.turn?.number) banner(view.turn.seat === me.seat ? "Your turn" : "Their turn", impactAt);
+	return impactAt;
 }
 
 /** Hide a card until its ghost lands, then pop it in (and splash the cauldron if it's a brew). */

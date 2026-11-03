@@ -205,7 +205,7 @@ input::placeholder {
 
 .room-info {
 	position: absolute;
-	right: 8px;
+	right: 64px; /* left of the sound controls */
 	top: 6px;
 	color: var(--muted);
 }
@@ -758,6 +758,55 @@ input::placeholder {
 .float.shield {
 	font-size: 8px;
 	color: #c8d4f0;
+}
+
+/* ---- Sound controls (top right, on every screen) ---- */
+
+#sound-ctl {
+	position: absolute;
+	right: 6px;
+	top: 4px;
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	z-index: 70; /* above the result overlay */
+}
+#mute-btn {
+	width: 11px;
+	height: 10px;
+	padding: 0;
+	border: 0;
+	background: url(/sprites/sound-on.png) center no-repeat;
+	cursor: pointer;
+}
+#mute-btn.off {
+	background-image: url(/sprites/sound-off.png);
+}
+#volume {
+	box-sizing: border-box;
+	width: 36px;
+	height: 6px;
+	margin: 0;
+	padding: 0;
+	appearance: none;
+	background: var(--panel);
+	border: 1px solid var(--ink);
+	cursor: pointer;
+}
+#volume::-webkit-slider-thumb {
+	appearance: none;
+	width: 4px;
+	height: 8px;
+	background: var(--text);
+	border: 1px solid var(--ink);
+	border-radius: 0;
+}
+#volume::-moz-range-thumb {
+	width: 4px;
+	height: 8px;
+	background: var(--text);
+	border: 1px solid var(--ink);
+	border-radius: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

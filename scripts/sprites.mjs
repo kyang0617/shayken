@@ -436,3 +436,26 @@ save("shield.png", fromMap([
 	"..o1o..",
 	"...o...",
 ], { o: OUTLINE, 1: "#5a6a8a", 2: "#8a9ac0", 3: "#c8d4f0", w: "#ffffff" }));
+
+// Sound toggle (top right): a speaker, with sound waves or with an X.
+const SPEAKER = { o: OUTLINE, 2: "#c8b8a8", 3: "#f4e8d8", 4: "#ffd34d", 5: "#e06a5a" };
+save("sound-on.png", fromMap([
+	"...o.....",
+	"..oo...4.",
+	"oo3o.4..4",
+	"o32o..4.4",
+	"o22o..4.4",
+	"oo2o.4..4",
+	"..oo...4.",
+	"...o.....",
+], SPEAKER));
+save("sound-off.png", fromMap([
+	"...o.....",
+	"..oo.....",
+	"oo3o.5..5",
+	"o32o..55.",
+	"o22o..55.",
+	"oo2o.5..5",
+	"..oo.....",
+	"...o.....",
+], SPEAKER));

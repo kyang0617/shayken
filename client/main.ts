@@ -3,6 +3,7 @@
 
 import { animate, snapshot } from "./anim";
 import { cardFace, clearBoard, renderBoard, setPlayHandler } from "./board";
+import { play, playCues } from "./sound";
 import "./stage";
 import { CloseCode, type ClientMessage, type CreateRoomResponse, type PlayerView, type ServerMessage } from "../shared/protocol";
 
@@ -100,7 +101,7 @@ function render(view: PlayerView): void {
 	stage.dataset.screen = "game";
 	const snap = snapshot();
 	renderBoard(view);
-	animate(snap, prev, view);
+	playCues(prev, view, animate(snap, prev, view));
 
 	// Local deadline from the server's relative msLeft, so a wrong client clock doesn't matter.
 	turnDeadline = view.turn ? performance.now() + view.turn.msLeft : null;
@@ -214,6 +215,8 @@ copyBtn.addEventListener("click", async () => {
 	setTimeout(() => (copyBtn.textContent = "Copy code"), 1500);
 });
 
+let lastTick = -1; // the last second the timer ticked on
+
 function updateTurnLabel(): void {
 	const view = lastView;
 	const label = $("turn");
@@ -224,6 +227,9 @@ function updateTurnLabel(): void {
 	}
 	const secs = Math.max(0, Math.ceil(((turnDeadline ?? 0) - performance.now()) / 1000));
 	const mine = view.turn.seat === view.you.seat;
+	// Tick through your last 10 seconds.
+	if (mine && secs <= 10 && secs > 0 && secs !== lastTick) play("tick", { vary: 0 });
+	lastTick = secs;
 	label.textContent = `Turn ${view.turn.number} · ${mine ? "Your turn" : "Their turn"} · ${secs}s`;
 	label.classList.toggle("mine", mine);
 }
