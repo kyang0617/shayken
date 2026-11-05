@@ -1,5 +1,5 @@
 /* Pixel-art board. Everything inside #stage is measured in art pixels on a 640×360 canvas;
-   client/stage.ts scales the whole stage up (by a whole number when it can) to fit the window. */
+   client/stage.ts scales the whole stage up to fit the window. */
 
 :root {
 	--ink: #1a1020; /* outlines, same as the sprites */
@@ -22,6 +22,9 @@ body {
 }
 
 body {
+	/* The stage's floor, continued past its edges when the window isn't 16:9. */
+	background: url(/sprites/floor.png) repeat var(--stage-x, 0) var(--stage-y, 0) / calc(32px * var(--scale, 1));
+	image-rendering: pixelated;
 	display: grid;
 	place-items: center;
 }
