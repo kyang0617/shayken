@@ -60,8 +60,12 @@ function place(zone: HTMLElement, cards: CardInstance[], playable: (c: CardInsta
 }
 
 function showPreview(cardId: CardId): void {
-	preview.replaceChildren(cardFace(cardId));
+	const face = cardFace(cardId);
+	preview.replaceChildren(face);
 	preview.hidden = false;
+	// Long rules text: tighten the layout so it fits. The card is only allowed to grow taller
+	// (see style.css) if even the tight layout isn't enough.
+	if (face.offsetHeight > parseFloat(getComputedStyle(face).minHeight)) face.classList.add("dense");
 }
 function hidePreview(): void {
 	preview.hidden = true;

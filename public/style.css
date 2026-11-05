@@ -612,7 +612,8 @@ input::placeholder {
 }
 #preview .card {
 	width: 84px;
-	height: 116px;
+	height: auto;
+	min-height: 116px;
 	gap: 4px;
 }
 #preview .card .art {
@@ -626,7 +627,18 @@ input::placeholder {
 #preview .card .text {
 	font: 8px/8px "Tiny5", monospace;
 	text-align: center;
-	padding: 0 2px;
+	padding: 0 2px 3px;
+}
+/* Long text (board.ts adds .dense): smaller art, tighter gaps and lines. */
+#preview .card.dense {
+	gap: 2px;
+}
+#preview .card.dense .art {
+	margin-top: 4px;
+	height: 34px;
+}
+#preview .card.dense .text {
+	line-height: 7px;
 }
 
 /* ---- Turn + actions ---- */
