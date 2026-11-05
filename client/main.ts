@@ -107,6 +107,9 @@ function render(view: PlayerView): void {
 	turnDeadline = view.turn ? performance.now() + view.turn.msLeft : null;
 	concedeBtn.disabled = view.status !== "playing";
 	resetConcede();
+	// After the match, Concede becomes a way out for anyone who closed the result screen.
+	concedeBtn.hidden = view.status === "finished";
+	$("leave-btn").hidden = view.status !== "finished";
 	// Only while waiting: once an opponent has joined, leaving means conceding instead.
 	$("waiting-actions").hidden = view.status !== "waiting";
 	cancelBtn.disabled = false;
@@ -172,13 +175,15 @@ $("result-close").addEventListener("click", () => {
 	$("result").hidden = true;
 });
 
-$("result-lobby").addEventListener("click", () => {
-	// Leave the finished room: forget its token and go back to create/join.
+/** Leave the finished room: forget its token and go back to create/join. */
+function leaveFinished(): void {
 	const ws = socket;
 	socket = null; // so the close handler doesn't report a disconnect
 	ws?.close();
 	leaveToLobby(lastView?.roomCode, "");
-});
+}
+$("result-lobby").addEventListener("click", leaveFinished);
+$("leave-btn").addEventListener("click", leaveFinished);
 
 /** Forget a room we're done with (its token, its view) and go back to create/join. */
 function leaveToLobby(code: string | undefined, status: string): void {
