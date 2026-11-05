@@ -205,6 +205,7 @@ function disrupt(room: RoomState, targetSeat: Seat, effect: Disruption): void {
 		case "removeOpponentIngredient": {
 			const removed = effect.position === "first" ? target.brew.shift() : target.brew.pop();
 			if (removed && !(CARDS[removed.cardId] as CardDef).token) target.discard.push(removed);
+			if (target.brew.length === 0) target.explodesOnTurn = null; // nothing left to blow up
 			break;
 		}
 		case "addToOpponentBrew":
@@ -216,7 +217,9 @@ function disrupt(room: RoomState, targetSeat: Seat, effect: Disruption): void {
 			break;
 		case "destabilizeBrew": {
 			// Counted from now: the target gets their next turn to throw, then it goes off. A
-			// second dose doesn't reset an already-burning fuse.
+			// second dose doesn't reset an already-burning fuse. An empty cauldron can't be made
+			// Volatile: it fizzles, rather than leaving a hidden fuse for whatever goes in next.
+			if (target.brew.length === 0) break;
 			const at = room.turn!.number + VOLATILE_FUSE_TURNS;
 			target.explodesOnTurn = Math.min(target.explodesOnTurn ?? at, at);
 			break;

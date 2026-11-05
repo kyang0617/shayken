@@ -546,13 +546,31 @@ describe("volatile brews", () => {
 		expect(room.lastExplosion).toBeUndefined();
 	});
 
-	it("an empty cauldron when the fuse runs out does nothing", () => {
+	it("fizzles on an empty cauldron", () => {
 		const room = fumed([]);
+		expect(room.players[1]!.explodesOnTurn).toBe(null);
+		room.players[1]!.brew = [card("wyrm_bile")]; // what goes in later is stable
 		endTurn(room, 0, TURN_MS, NOW);
 		endTurn(room, 1, TURN_MS, NOW);
 		endTurn(room, 0, TURN_MS, NOW);
 		expect(room.lastExplosion).toBeUndefined();
 		expect(room.players[1]!.health).toBe(STARTING_HEALTH);
+	});
+
+	it("the fuse goes out when Curdle empties the cauldron", () => {
+		const room = fumed(["wyrm_bile"]);
+		room.players[0]!.hand.push(card("curdle"));
+		playCard(room, 0, room.players[0]!.hand[0].iid);
+		expect(room.players[1]!.brew).toEqual([]);
+		expect(room.players[1]!.explodesOnTurn).toBe(null);
+	});
+
+	it("the fuse keeps burning when Curdle leaves ingredients", () => {
+		const room = fumed(["wyrm_bile", "fire_salt"]);
+		room.players[0]!.hand.push(card("curdle"));
+		playCard(room, 0, room.players[0]!.hand[0].iid);
+		expect(room.players[1]!.brew).toHaveLength(1);
+		expect(room.players[1]!.explodesOnTurn).toBe(4);
 	});
 
 	it("a lethal explosion ends the match in the other player's favour", () => {

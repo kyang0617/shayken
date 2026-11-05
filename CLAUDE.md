@@ -52,7 +52,8 @@ when making changes — the owner wants to understand the code, not just have it
   Queued in `nextHexes`, active in `hexes` during that turn, cleared when it ends. Public.
 - **Volatile:** a brew made Volatile (Unstable Fumes) explodes at the start of its owner's turn
   after next (they get one turn to throw it) for half its throw damage, rounded up
-  (`explosionDamage`). Shields don't apply and don't break. Throwing defuses it.
+  (`explosionDamage`). Shields don't apply and don't break. Throwing defuses it, and so does
+  the brew becoming empty (Curdle); an empty brew can't be made Volatile.
 - **Tokens** (e.g. Sludge): cards created by other cards, never in a deck; they vanish when
   they leave the brew instead of going to the discard pile.
 - No shield-focused cards for now. More Volatile cards (big payoffs that must be thrown the
