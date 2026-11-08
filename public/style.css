@@ -565,8 +565,8 @@ input::placeholder {
 	position: absolute;
 	left: 140px;
 	right: 140px;
-	bottom: -14px;
-	height: 80px;
+	bottom: 4px; /* fully on screen; hovering still lifts a card */
+	height: 76px;
 	display: flex;
 	justify-content: center;
 	gap: 3px;
