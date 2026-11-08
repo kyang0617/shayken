@@ -154,6 +154,12 @@ check(again.view.status === "playing" && again.view.turn.number === 1 && again.v
 await p0.until((c) => view(c).status === "playing");
 check(view(p0).you.health === 40 && view(p1).you.health === 40 && view(p0).lastThrow === null, "the new match starts fresh");
 check((await act(p0, { type: "rematch" })).code === "NOT_FINISHED", "can't vote for a rematch mid-match");
-p0.ws.close(); p1.ws.close();
+await act(p1, { type: "concede" });
+await act(p0, { type: "rematch" });
+await p1.until((c) => view(c).rematchVotes[0]);
+p0.ws.close();
+await p1.until((c) => view(c).opponent.connected === false);
+check(!view(p1).rematchVotes[0], "leaving after the match withdraws your rematch vote");
+p1.ws.close();
 
 finish();

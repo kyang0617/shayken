@@ -120,6 +120,7 @@ function render(view: PlayerView): void {
 	else setStatus("");
 	updateTurnLabel();
 	renderResult(view);
+	renderRematch(view);
 }
 
 // ---- Win / lose screen ----
@@ -168,7 +169,31 @@ function showRoomClosed(): void {
 function setRoomClosed(closed: boolean): void {
 	$("result-closed").hidden = !closed;
 	$("result-close").hidden = closed;
+	if (closed) for (const b of againBtns) b.hidden = true; // no room left to play again in
+	if (closed) $("result-rematch").textContent = "";
 }
+
+// ---- Play again ----
+// On the result screen and on the board (for anyone who closed the result screen). The server
+// starts a new match in this room once both players have asked; render() then takes it from there.
+
+const againBtns = [$<HTMLButtonElement>("result-again"), $<HTMLButtonElement>("again-btn")];
+
+function renderRematch(view: PlayerView): void {
+	const show = view.status === "finished" && socket !== null;
+	const mine = view.rematchVotes[view.you.seat];
+	const theirs = view.rematchVotes[view.you.seat === 0 ? 1 : 0];
+	const gone = !view.opponent?.connected;
+	for (const b of againBtns) {
+		b.hidden = !show;
+		b.disabled = mine || gone;
+		b.textContent = gone ? "Opponent left" : mine ? "Waiting..." : theirs ? "Accept rematch" : "Play again";
+	}
+	$("result-rematch").textContent =
+		!show || gone ? "" : mine ? "Waiting for your opponent..." : theirs ? "Your opponent wants a rematch!" : "";
+}
+
+for (const b of againBtns) b.addEventListener("click", () => socket && send(socket, { type: "rematch" }));
 
 $("result-close").addEventListener("click", () => {
 	resultDismissed = true;
