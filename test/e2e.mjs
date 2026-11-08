@@ -96,17 +96,23 @@ check((await act(idle, { type: "playCard", iid: someIid })).code === "NOT_YOUR_T
 check((await act(active, { type: "playCard", iid: "p9-99" })).code === "CARD_NOT_IN_HAND", "can't play a card you don't hold");
 check((await act(active, { type: "playCard", iid: 7 })).code === "BAD_MESSAGE", "playCard with a non-string iid is rejected");
 
-// Every starter card costs <= 3, so the first card is always affordable on turn 1.
-const played = await act(active, { type: "playCard", iid: someIid });
-check(played.type === "state" && !played.view.you.hand.some((c) => c.iid === someIid), "playing a card removes it from hand");
-check((await act(active, { type: "playCard", iid: someIid })).code === "CARD_NOT_IN_HAND", "can't play the same card twice");
+// Some cards cost more than turn 1's 3 essence, so play the first one that's affordable. Only
+// 4 cards in the deck cost more, so a hand of 5 always has one.
+let played, playedIid;
+for (const c of view(active).you.hand) {
+  played = await act(active, { type: "playCard", iid: c.iid });
+  if (played.type === "state") { playedIid = c.iid; break; }
+  check(played.code === "NOT_ENOUGH_ESSENCE", `unaffordable ${c.cardId} rejected`);
+}
+check(played.type === "state" && !played.view.you.hand.some((c) => c.iid === playedIid), "playing a card removes it from hand");
+check((await act(active, { type: "playCard", iid: playedIid })).code === "CARD_NOT_IN_HAND", "can't play the same card twice");
 await idle.until((c) => {
   const o = view(c).opponent;
-  return o.brew.some((x) => x.iid === someIid) || o.powers.some((x) => x.iid === someIid) || o.discardCount > 0;
+  return o.brew.some((x) => x.iid === playedIid) || o.powers.some((x) => x.iid === playedIid) || o.discardCount > 0;
 });
 check(true, "opponent sees the played card land in brew, powers or discard");
 const lp = view(idle).lastPlay;
-check(lp && lp.seat === first && lp.turn === 1 && lp.card.iid === someIid, "opponent's view records which card was played");
+check(lp && lp.seat === first && lp.turn === 1 && lp.card.iid === playedIid, "opponent's view records which card was played");
 
 const ended = await act(active, { type: "endTurn" });
 check(ended.view.turn.seat !== first && ended.view.turn.number === 2 && ended.view.you.hand.length === 0, "end turn passes play and discards the hand");
