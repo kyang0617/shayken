@@ -63,8 +63,15 @@ function showPreview(cardId: CardId): void {
 	const face = cardFace(cardId);
 	preview.replaceChildren(face);
 	preview.hidden = false;
-	// Long rules text: tighten the layout so it fits. The card is only allowed to grow taller
-	// (see style.css) if even the tight layout isn't enough.
+	fitText(face);
+}
+
+/**
+ * For an enlarged card face (with rules text) that's already on screen: if the text is too long,
+ * tighten the layout so it fits. The card only grows taller (see style.css) if even that isn't
+ * enough.
+ */
+export function fitText(face: HTMLElement): void {
 	if (face.offsetHeight > parseFloat(getComputedStyle(face).minHeight)) face.classList.add("dense");
 }
 function hidePreview(): void {
