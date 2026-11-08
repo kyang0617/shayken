@@ -104,6 +104,21 @@ describe("playCard legality", () => {
 });
 
 describe("playCard effects", () => {
+	it("records the play so the opponent can see it", () => {
+		const room = roomWithHand(["siphon", "moonwater"], 3);
+		const [siphon, moonwater] = room.players[0]!.hand;
+		playCard(room, 0, siphon.iid);
+		expect(room.lastPlay).toEqual({ seat: 0, turn: 1, card: siphon });
+		playCard(room, 0, moonwater.iid);
+		expect(room.lastPlay).toEqual({ seat: 0, turn: 1, card: moonwater });
+	});
+
+	it("an illegal play isn't recorded", () => {
+		const room = roomWithHand(["seal"], 1); // costs 5
+		expect(playCard(room, 0, room.players[0]!.hand[0].iid).ok).toBe(false);
+		expect(room.lastPlay).toBeUndefined();
+	});
+
 	it("attack: pays cost and goes into the brew", () => {
 		const room = roomWithHand(["nightshade"], 3);
 		const p = room.players[0]!;

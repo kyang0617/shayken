@@ -55,6 +55,7 @@ export function playCard(room: RoomState, seat: Seat, iid: string): ActionResult
 
 	player.hand.splice(index, 1);
 	player.essence -= cost;
+	room.lastPlay = { seat, turn: room.turn!.number, card };
 
 	for (const effect of def.effects) resolve(room, seat, effect);
 

@@ -105,6 +105,8 @@ await idle.until((c) => {
   return o.brew.some((x) => x.iid === someIid) || o.powers.some((x) => x.iid === someIid) || o.discardCount > 0;
 });
 check(true, "opponent sees the played card land in brew, powers or discard");
+const lp = view(idle).lastPlay;
+check(lp && lp.seat === first && lp.turn === 1 && lp.card.iid === someIid, "opponent's view records which card was played");
 
 const ended = await act(active, { type: "endTurn" });
 check(ended.view.turn.seat !== first && ended.view.turn.number === 2 && ended.view.you.hand.length === 0, "end turn passes play and discards the hand");

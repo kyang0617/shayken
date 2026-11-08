@@ -2,7 +2,7 @@
 // filtered PlayerView (see viewFor in game-room.ts).
 
 import type { CardInstance } from "../shared/cards";
-import type { ExplosionRecord, Hexes, Seat, ThrowRecord } from "../shared/protocol";
+import type { ExplosionRecord, Hexes, PlayRecord, Seat, ThrowRecord } from "../shared/protocol";
 
 export interface PlayerState {
 	token: string;
@@ -45,6 +45,7 @@ export interface RoomState {
 	winner: Seat | null;
 	lastThrow: ThrowRecord | null;
 	lastExplosion?: ExplosionRecord | null;
+	lastPlay?: PlayRecord | null;
 	tokensMade?: number; // counter for token card iids, so every iid in the match is unique
 	reap: ReapTimer | null; // null while both players are connected
 	/**

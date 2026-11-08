@@ -72,6 +72,8 @@ export interface PlayerView {
 	lastThrow: ThrowRecord | null;
 	/** The most recent Volatile explosion in this match. */
 	lastExplosion: ExplosionRecord | null;
+	/** The most recent card played, by either player, so the other one can see what it was. */
+	lastPlay: PlayRecord | null;
 	you: PublicPlayerView & { seat: Seat; hand: CardInstance[] };
 	opponent: (PublicPlayerView & { connected: boolean; handCount: number }) | null;
 }
@@ -82,6 +84,17 @@ export interface ThrowRecord {
 	cards: CardInstance[];
 	damage: number; // what the target actually lost, after their shield
 	blocked: number; // how much the shield stopped
+}
+
+/**
+ * A card someone played. Played cards are public: this is how the opponent learns what a
+ * skill was, since skills go straight to the discard pile, which is shown as a count only.
+ * (turn, card.iid) identifies one play: a card can't be played twice in one turn.
+ */
+export interface PlayRecord {
+	seat: Seat; // who played it
+	turn: number;
+	card: CardInstance;
 }
 
 /** A Volatile brew that blew up in its owner's face at the start of their turn. */

@@ -282,6 +282,7 @@ export class GameRoom extends DurableObject<Env> {
 			winner: room.winner,
 			lastThrow: room.lastThrow ?? null, // ?? for rooms saved before throwing existed
 			lastExplosion: room.lastExplosion ?? null,
+			lastPlay: room.lastPlay ?? null,
 			you: { ...publicView(me), seat, hand: me.hand },
 			opponent: opp && {
 				...publicView(opp),
