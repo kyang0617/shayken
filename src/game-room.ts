@@ -9,7 +9,7 @@ import {
 	type ServerMessage,
 } from "../shared/protocol";
 import { randomToken } from "./random";
-import { concede, endTurn, newPlayer, noHexes, otherSeat, playCard, startMatch, type ActionResult } from "./rules";
+import { concede, endTurn, newPlayer, noHexes, otherSeat, playCard, rematch, startMatch, type ActionResult } from "./rules";
 import type { PlayerState, RoomState } from "./state";
 
 // What we attach to each WebSocket. Attachments survive hibernation; instance fields don't.
@@ -176,6 +176,8 @@ export class GameRoom extends DurableObject<Env> {
 				return this.handleAction(ws, (room, seat) => endTurn(room, seat, this.turnMs, Date.now(), msg.throw === true));
 			case "concede":
 				return this.handleAction(ws, (room, seat) => concede(room, seat));
+			case "rematch":
+				return this.handleAction(ws, (room, seat) => rematch(room, seat, this.turnMs, Date.now()));
 			case "leave":
 				return this.handleLeave(ws);
 		}
@@ -192,6 +194,10 @@ export class GameRoom extends DurableObject<Env> {
 		// back with their token (until the room is reaped).
 		const room = this.load();
 		if (!room) return;
+		// A player who leaves after the match withdraws their rematch vote, so the other player
+		// can't start a new match against an empty seat (whose turns would just time out).
+		const { seat } = getAttachment(ws);
+		if (seat !== null && room.rematchVotes && this.socketsForSeat(seat).length === 0) room.rematchVotes[seat] = false;
 		this.persist(room);
 		this.broadcastState(room);
 	}
@@ -280,6 +286,7 @@ export class GameRoom extends DurableObject<Env> {
 				msLeft: Math.max(0, room.turn.endsAt - Date.now()),
 			},
 			winner: room.winner,
+			rematchVotes: room.rematchVotes ?? [false, false],
 			lastThrow: room.lastThrow ?? null, // ?? for rooms saved before throwing existed
 			lastExplosion: room.lastExplosion ?? null,
 			you: { ...publicView(me), seat, hand: me.hand },
@@ -373,6 +380,7 @@ function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | null {
 			if (msg.throw !== undefined && typeof msg.throw !== "boolean") return null;
 			return { type: "endTurn", throw: msg.throw };
 		case "concede":
+		case "rematch":
 		case "leave":
 			return { type: msg.type };
 		default:

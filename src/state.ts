@@ -43,6 +43,7 @@ export interface RoomState {
 	players: [PlayerState | null, PlayerState | null]; // index = seat
 	turn: TurnState | null; // non-null exactly while status is "playing"
 	winner: Seat | null;
+	rematchVotes?: [boolean, boolean]; // after a match, index = seat; reset when the rematch starts
 	lastThrow: ThrowRecord | null;
 	lastExplosion?: ExplosionRecord | null;
 	tokensMade?: number; // counter for token card iids, so every iid in the match is unique

@@ -144,6 +144,16 @@ const conceded = await act(idle, { type: "concede" });
 check(conceded.view.status === "finished" && conceded.view.winner === view(active).you.seat, "conceding ends the match");
 await active.until((c) => view(c).status === "finished");
 check((await act(active, { type: "endTurn" })).code === "NOT_PLAYING", "no actions after the match ends");
+
+// ---- Play again ----
+const voted = await act(p0, { type: "rematch" });
+check(voted.view.status === "finished" && voted.view.rematchVotes[0] && !voted.view.rematchVotes[1], "one rematch vote waits for the other player");
+await p1.until((c) => view(c).rematchVotes[0]);
+const again = await act(p1, { type: "rematch" });
+check(again.view.status === "playing" && again.view.turn.number === 1 && again.view.winner === null, "both votes start a new match in the same room");
+await p0.until((c) => view(c).status === "playing");
+check(view(p0).you.health === 40 && view(p1).you.health === 40 && view(p0).lastThrow === null, "the new match starts fresh");
+check((await act(p0, { type: "rematch" })).code === "NOT_FINISHED", "can't vote for a rematch mid-match");
 p0.ws.close(); p1.ws.close();
 
 finish();

@@ -24,6 +24,8 @@ export type ClientMessage =
 	/** End your turn. With `throw: true`, your brew is thrown at the opponent first. */
 	| { type: "endTurn"; throw?: boolean }
 	| { type: "concede" }
+	/** After a match: ask to play again in the same room. Starts once both players have asked. */
+	| { type: "rematch" }
 	/**
 	 * Leave the room. While waiting for an opponent this cancels (deletes) the room; during a
 	 * match it counts as conceding. The server then closes your socket with CloseCode.Left.
@@ -41,6 +43,7 @@ export type ErrorCode =
 	| "ROOM_EXPIRED"
 	// Rejected game actions:
 	| "NOT_PLAYING"
+	| "NOT_FINISHED"
 	| "NOT_YOUR_TURN"
 	| "CARD_NOT_IN_HAND"
 	| "NOT_ENOUGH_ESSENCE"
@@ -68,6 +71,8 @@ export interface PlayerView {
 	 */
 	turn: { seat: Seat; number: number; msLeft: number } | null;
 	winner: Seat | null;
+	/** After a match: which seats have asked to play again (index = seat). */
+	rematchVotes: [boolean, boolean];
 	/** The most recent throw in this match, so clients can show what just happened. */
 	lastThrow: ThrowRecord | null;
 	/** The most recent Volatile explosion in this match. */
