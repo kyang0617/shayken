@@ -6,7 +6,7 @@ import type { CardId, CardInstance } from "../../shared/cards";
 import { brewDamage, damageAfterShield, explosionDamage } from "../../shared/brew";
 import { DECK_SIZE, STARTER_DECK } from "../../shared/decks";
 import { ESSENCE_PER_TURN, HAND_SIZE, SHIELD_STEPS, STARTING_HEALTH } from "../../shared/rules";
-import { concede, endTurn, newPlayer, playCard, startMatch } from "../../src/rules";
+import { concede, endTurn, newPlayer, playCard, rematch, startMatch } from "../../src/rules";
 import type { RoomState } from "../../src/state";
 
 const TURN_MS = 60_000;
@@ -583,4 +583,49 @@ describe("volatile brews", () => {
 		expect(room.players[1]!.health).toBe(0);
 	});
 
+});
+
+describe("rematch", () => {
+	/** A finished match: seat 1 conceded on turn 1, with some state left over. */
+	function finished(): RoomState {
+		const room = roomWithHand(["wyrm_bile"]);
+		playCard(room, 0, room.players[0]!.hand[0].iid);
+		room.players[1]!.health = 7;
+		concede(room, 1);
+		room.expiresAt = NOW + 1000;
+		return room;
+	}
+
+	it("is only allowed once the match is over", () => {
+		const room = roomWithHand(["fire_salt"]);
+		expect(rematch(room, 0, TURN_MS, NOW)).toMatchObject({ ok: false, code: "NOT_FINISHED" });
+		expect(rematch(newRoom(), 0, TURN_MS, NOW)).toMatchObject({ ok: false, code: "NOT_FINISHED" });
+	});
+
+	it("one vote waits for the other player", () => {
+		const room = finished();
+		expect(rematch(room, 0, TURN_MS, NOW).ok).toBe(true);
+		expect(rematch(room, 0, TURN_MS, NOW).ok).toBe(true); // asking twice is harmless
+		expect(room.rematchVotes).toEqual([true, false]);
+		expect(room.status).toBe("finished");
+	});
+
+	it("both votes start a fresh match with the same seats and tokens", () => {
+		const room = finished();
+		rematch(room, 1, TURN_MS, NOW);
+		rematch(room, 0, TURN_MS, NOW);
+		expect(room).toMatchObject({ status: "playing", winner: null, lastThrow: null, lastExplosion: null, rematchVotes: [false, false] });
+		expect(room.expiresAt).toBeUndefined();
+		expect(room.turn).toMatchObject({ number: 1, endsAt: NOW + TURN_MS });
+		expect(room.players.map((p) => p!.token)).toEqual(["tok0", "tok1"]);
+		for (const p of room.players) {
+			expect(p!.health).toBe(STARTING_HEALTH);
+			expect(p!.shield).toBe(SHIELD_STEPS[0]);
+			expect(p!.brew).toEqual([]);
+			expect(p!.hand.length + p!.deck.length).toBe(DECK_SIZE);
+		}
+		const active = room.players[room.turn!.seat]!;
+		expect(active.hand).toHaveLength(HAND_SIZE);
+		expect(active.essence).toBe(ESSENCE_PER_TURN);
+	});
 });

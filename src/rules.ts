@@ -114,6 +114,29 @@ export function concede(room: RoomState, seat: Seat): ActionResult {
 	return OK;
 }
 
+/**
+ * After a match, `seat` asks to play again. Once both seats have asked, a fresh match starts
+ * in the same room: same seats and tokens (so nobody has to share a new code), everything else
+ * reset, and a new coin flip for who goes first.
+ */
+export function rematch(room: RoomState, seat: Seat, turnMs: number, now: number): ActionResult {
+	if (room.status !== "finished") return fail("NOT_FINISHED", "The match isn't over");
+	const votes = (room.rematchVotes ??= [false, false]);
+	votes[seat] = true;
+	if (!votes[0] || !votes[1]) return OK;
+
+	for (const [seat, player] of room.players.entries()) room.players[seat] = newPlayer(player!.token);
+	room.winner = null;
+	room.rematchVotes = [false, false];
+	room.lastThrow = null;
+	room.lastExplosion = null;
+	// The post-match expiry belonged to the match that just ended. persist() sets a new one
+	// when this one finishes.
+	delete room.expiresAt;
+	startMatch(room, turnMs, now);
+	return OK;
+}
+
 // ---- Internals ----
 
 /** The next shield step down; stays at the last step (no shield) once there. */

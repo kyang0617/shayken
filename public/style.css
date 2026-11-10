@@ -723,6 +723,12 @@ input::placeholder {
 #result-closed {
 	color: var(--muted);
 }
+#result-rematch {
+	color: var(--gold);
+}
+#result-rematch:empty {
+	display: none;
+}
 .result-actions {
 	display: flex;
 	gap: 6px;

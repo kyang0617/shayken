@@ -8,6 +8,8 @@ when making changes — the owner wants to understand the code, not just have it
 
 **Decided** (implemented in `src/rules.ts`, numbers in `shared/rules.ts`):
 - Quick (~10 min) 1v1 matches. 40 health each; reduce the opponent to 0 to win, or they concede.
+- **Play again:** after a match, once both players ask (`rematch`), a fresh match starts in the
+  same room with a new coin flip. Leaving withdraws your request.
 - Fixed starter deck, same for both players: 28 cards for now (every card goes in until
   deckbuilding exists; the plan is 20). First player is a server-side coin flip.
 - Turns have no sub-phases: at turn start you draw 5 and gain 3 essence, then play any cards
@@ -100,7 +102,7 @@ definitions and numbers are placeholders.
 - Three deadlines share the one alarm: the turn timer (`room.turn.endsAt`, `TURN_SECONDS` = 60),
   room reaping (`room.reap.at`; 0 joined players connected → `REAP_EMPTY_SECONDS` = 60,
   1 connected → `REAP_SOLO_SECONDS` = 600), and post-match expiry (`room.expiresAt`, set once
-  in `persist()` when the match finishes → `REAP_FINISHED_SECONDS` = 300, even if both stay). `syncAlarm` sets the alarm to the earliest
+  in `persist()` when the match finishes → `REAP_FINISHED_SECONDS` = 300, even if both stay; a rematch clears it). `syncAlarm` sets the alarm to the earliest
   deadline; `alarm()` handles whichever are due. A new timer = a new deadline field in state,
   added to `syncAlarm` and `alarm()`. Never call `setAlarm` anywhere else.
 - Always save through `persist(room)`: it refreshes the reap deadline and re-arms the alarm.
