@@ -170,4 +170,32 @@ await p1.until((c) => view(c).opponent.connected === false);
 check(!view(p1).rematchVotes[0], "leaving after the match withdraws your rematch vote");
 p1.ws.close();
 
+// ---- Custom decks ----
+// A legal deck that differs from the starter: no Fire Salt, Frost Lichen or Nightshade.
+const custom = [
+  "vampire_root", "dragon_pepper", "ghost_pepper", "wyrm_bile", "phoenix_feather", "distillate", "philosophers_salt",
+  "bottled_spark", "moonwater", "honey_mead", "starlight_dust", "mandrake_root",
+  "curdle", "sludge_flask", "siphon", "unstable_fumes", "bitter_draught", "fog", "seal", "choking_smoke",
+];
+const dg = await createRoom();
+const cheat = await join(dg, undefined, [...custom.slice(1), "wyrm_bile"]);
+check(cheat.last("error")?.code === "BAD_DECK" && cheat.closed === 4002, "a deck breaking the rules is rejected (BAD_DECK)");
+const sludgy = await join(dg, undefined, [...custom.slice(1), "sludge"]);
+check(sludgy.last("error")?.code === "BAD_DECK", "a token in a deck is rejected");
+const d0 = await join(dg, undefined, custom);
+const d1 = await join(dg);
+await d0.until((c) => view(c).status === "playing");
+await d1.until((c) => view(c).status === "playing");
+// Only the active player has a hand, so make sure it's the custom player's turn.
+if (view(d0).turn.seat !== view(d0).you.seat) {
+  await act(d1, { type: "endTurn" });
+  await d0.until((c) => view(c).you.hand.length > 0);
+}
+const hand = view(d0).you.hand.map((x) => x.cardId);
+check(hand.length === 5 && view(d0).you.deckCount === 15, "custom deck has 20 cards");
+check(hand.every((id) => custom.includes(id)), "custom player's hand comes from their own list");
+const reclaim = await join(dg, d0.last("joined").token, ["fire_salt"]);
+check(reclaim.last("joined")?.seat === view(d0).you.seat, "reclaiming a seat ignores any deck sent");
+reclaim.ws.close(); d1.ws.close();
+
 finish();

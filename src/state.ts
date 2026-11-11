@@ -1,11 +1,13 @@
 // The full, secret state of one match. Only the GameRoom ever sees all of it; clients get a
 // filtered PlayerView (see viewFor in game-room.ts).
 
-import type { CardInstance } from "../shared/cards";
+import type { CardId, CardInstance } from "../shared/cards";
 import type { ExplosionRecord, Hexes, PlayRecord, Seat, ThrowRecord } from "../shared/protocol";
 
 export interface PlayerState {
 	token: string;
+	/** The deck this player chose on joining (validated), reused for rematches. Missing in rooms saved before deckbuilding: the starter. */
+	deckList?: CardId[];
 	health: number;
 	essence: number;
 	shield: number; // percent of throw damage blocked; one of SHIELD_STEPS

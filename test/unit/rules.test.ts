@@ -65,6 +65,20 @@ describe("startMatch", () => {
 		}));
 		expect(firsts).toEqual(new Set([0, 1]));
 	});
+
+	it("deals each player from their own deck list, and a rematch keeps it", () => {
+		const custom = BUILDABLE.slice(BUILDABLE.length - DECK_SIZE);
+		const room = newRoom();
+		room.players[1] = newPlayer("tok1", custom);
+		startMatch(room, TURN_MS, NOW);
+		const all = (seat: 0 | 1) => { const p = room.players[seat]!; return ids([...p.hand, ...p.deck]).sort(); };
+		expect(all(0)).toEqual([...STARTER_DECK].sort());
+		expect(all(1)).toEqual([...custom].sort());
+		concede(room, 0);
+		rematch(room, 0, TURN_MS, NOW);
+		rematch(room, 1, TURN_MS, NOW);
+		expect(all(1)).toEqual([...custom].sort());
+	});
 });
 
 describe("playCard legality", () => {

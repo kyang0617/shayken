@@ -5,7 +5,7 @@
 // Every action re-checks legality itself. Never assume the client only sends legal moves.
 
 import { brewDamage, damageAfterShield, explosionDamage } from "../shared/brew";
-import { CARDS, type CardDef, type CardInstance, type Disruption, type Effect, type ThrowEffect } from "../shared/cards";
+import { CARDS, type CardDef, type CardId, type CardInstance, type Disruption, type Effect, type ThrowEffect } from "../shared/cards";
 import { STARTER_DECK } from "../shared/decks";
 import type { ErrorCode, Hexes, Seat } from "../shared/protocol";
 import { ESSENCE_PER_TURN, HAND_SIZE, SHIELD_STEPS, STARTING_HEALTH, VOLATILE_FUSE_TURNS } from "../shared/rules";
@@ -21,9 +21,9 @@ export const otherSeat = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
 
 export const noHexes = (): Hexes => ({ costUp: 0, drawLimit: null, sealed: false });
 
-export function newPlayer(token: string): PlayerState {
+export function newPlayer(token: string, deckList: readonly CardId[] = STARTER_DECK): PlayerState {
 	return {
-		token, health: STARTING_HEALTH, essence: 0, shield: SHIELD_STEPS[0], deck: [], hand: [], discard: [], brew: [], powers: [],
+		token, deckList: [...deckList], health: STARTING_HEALTH, essence: 0, shield: SHIELD_STEPS[0], deck: [], hand: [], discard: [], brew: [], powers: [],
 		nextHexes: noHexes(), hexes: noHexes(), explodesOnTurn: null,
 	};
 }
@@ -31,7 +31,8 @@ export function newPlayer(token: string): PlayerState {
 /** Both seats are filled: shuffle each deck, flip for who goes first, start turn 1. */
 export function startMatch(room: RoomState, turnMs: number, now: number): void {
 	for (const [seat, player] of room.players.entries()) {
-		const deck = STARTER_DECK.map((cardId, i): CardInstance => ({ iid: `p${seat}-${i}`, cardId }));
+		// Each player's own list. It was validated when they joined, so only the server's copy is used.
+		const deck = (player!.deckList ?? STARTER_DECK).map((cardId, i): CardInstance => ({ iid: `p${seat}-${i}`, cardId }));
 		player!.deck = shuffle(deck);
 	}
 	room.status = "playing";
@@ -126,7 +127,7 @@ export function rematch(room: RoomState, seat: Seat, turnMs: number, now: number
 	votes[seat] = true;
 	if (!votes[0] || !votes[1]) return OK;
 
-	for (const [seat, player] of room.players.entries()) room.players[seat] = newPlayer(player!.token);
+	for (const [seat, player] of room.players.entries()) room.players[seat] = newPlayer(player!.token, player!.deckList);
 	room.winner = null;
 	room.rematchVotes = [false, false];
 	room.lastThrow = null;

@@ -30,10 +30,10 @@ export function client(code) {
 }
 
 /** Connect and join (optionally with a token); resolves once the join is answered. */
-export async function join(code, token) {
+export async function join(code, token, deck) {
   const c = client(code);
   await c.open;
-  c.ws.send(JSON.stringify({ type: "join", token }));
+  c.ws.send(JSON.stringify({ type: "join", token, deck }));
   await c.until((c) => c.last("state") || c.closed !== null);
   return c;
 }
