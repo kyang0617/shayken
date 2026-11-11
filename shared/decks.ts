@@ -1,25 +1,25 @@
-import type { CardId } from "./cards";
+import { CARDS, type CardDef, type CardId } from "./cards";
 
-// Over the planned 20 for now: every card goes in until deckbuilding exists.
-export const DECK_SIZE = 28;
+// Deckbuilding rules. One implementation, used by the client for live feedback in the deck
+// builder and by the server, which has the final say (a deck from the client is only a request).
+export const DECK_SIZE = 20;
+export const MAX_COPIES = 1;
 
-// V1: both players get the same fixed list. The server copies and shuffles it per player.
+/** Every card a deck may contain: all cards except tokens, which only other cards create. */
+export const BUILDABLE: readonly CardId[] = (Object.keys(CARDS) as CardId[]).filter((id) => !(CARDS[id] as CardDef).token);
+
+// The default for anyone who hasn't built a deck. It follows the same rules as built decks.
 export const STARTER_DECK: readonly CardId[] = [
-	"fire_salt", "fire_salt",
+	"fire_salt",
 	"frost_lichen",
 	"nightshade",
-	"vampire_root",
-	"dragon_pepper",
-	"ghost_pepper",
 	"wyrm_bile",
 	"phoenix_feather",
 	"distillate",
 	"philosophers_salt",
-	"bottled_spark", "bottled_spark",
+	"bottled_spark",
 	"moonwater",
-	"honey_mead", "honey_mead",
-	"quicksilver",
-	"troll_moss",
+	"honey_mead",
 	"starlight_dust",
 	"mandrake_root",
 	// Disruption
@@ -32,3 +32,22 @@ export const STARTER_DECK: readonly CardId[] = [
 	"seal",
 	"choking_smoke",
 ];
+
+export type DeckCheck = { ok: true; deck: CardId[] } | { ok: false; reason: string };
+
+/**
+ * Is this a legal deck? Takes `unknown` because the server runs it on whatever a client sent.
+ * Reports the first problem found, worded for the deck builder.
+ */
+export function validateDeck(list: unknown): DeckCheck {
+	if (!Array.isArray(list)) return { ok: false, reason: "Not a deck" };
+	const counts = new Map<CardId, number>();
+	for (const id of list) {
+		if (typeof id !== "string" || !(BUILDABLE as readonly string[]).includes(id)) return { ok: false, reason: "Unknown card" };
+		const n = (counts.get(id as CardId) ?? 0) + 1;
+		if (n > MAX_COPIES) return { ok: false, reason: `${CARDS[id as CardId].name}: max ${MAX_COPIES} ${MAX_COPIES === 1 ? "copy" : "copies"}` };
+		counts.set(id as CardId, n);
+	}
+	if (list.length !== DECK_SIZE) return { ok: false, reason: `A deck needs exactly ${DECK_SIZE} cards (${list.length} now)` };
+	return { ok: true, deck: list as CardId[] };
+}

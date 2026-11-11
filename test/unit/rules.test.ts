@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { CardId, CardInstance } from "../../shared/cards";
 import { brewDamage, damageAfterShield, explosionDamage } from "../../shared/brew";
-import { DECK_SIZE, STARTER_DECK } from "../../shared/decks";
+import { BUILDABLE, DECK_SIZE, STARTER_DECK, validateDeck } from "../../shared/decks";
 import { ESSENCE_PER_TURN, HAND_SIZE, SHIELD_STEPS, STARTING_HEALTH } from "../../shared/rules";
 import { concede, endTurn, newPlayer, playCard, rematch, startMatch } from "../../src/rules";
 import type { RoomState } from "../../src/state";
@@ -37,7 +37,7 @@ function roomWithHand(hand: CardId[], essence = 3, deck: CardId[] = []): RoomSta
 }
 
 describe("starter deck", () => {
-	it(`has ${DECK_SIZE} cards`, () => expect(STARTER_DECK).toHaveLength(DECK_SIZE));
+	it("follows the deckbuilding rules", () => expect(validateDeck([...STARTER_DECK])).toEqual({ ok: true, deck: STARTER_DECK }));
 });
 
 describe("startMatch", () => {
@@ -642,5 +642,35 @@ describe("rematch", () => {
 		const active = room.players[room.turn!.seat]!;
 		expect(active.hand).toHaveLength(HAND_SIZE);
 		expect(active.essence).toBe(ESSENCE_PER_TURN);
+	});
+});
+
+describe("validateDeck", () => {
+	const legal = BUILDABLE.slice(0, DECK_SIZE);
+
+	it("accepts 20 different buildable cards", () => {
+		expect(validateDeck(legal)).toEqual({ ok: true, deck: legal });
+	});
+
+	it("rejects the wrong size", () => {
+		expect(validateDeck(legal.slice(1))).toMatchObject({ ok: false, reason: expect.stringContaining("exactly 20") });
+		expect(validateDeck([])).toMatchObject({ ok: false });
+	});
+
+	it("rejects a second copy of a card", () => {
+		expect(validateDeck([...legal.slice(1), legal[2]])).toMatchObject({ ok: false, reason: expect.stringContaining("max 1") });
+	});
+
+	it("rejects tokens, unknown cards and anything that isn't a list of ids", () => {
+		expect(validateDeck([...legal.slice(1), "sludge"])).toMatchObject({ ok: false, reason: "Unknown card" });
+		expect(validateDeck([...legal.slice(1), "made_up"])).toMatchObject({ ok: false, reason: "Unknown card" });
+		expect(validateDeck([...legal.slice(1), 7])).toMatchObject({ ok: false });
+		expect(validateDeck("fire_salt")).toMatchObject({ ok: false });
+		expect(validateDeck(undefined)).toMatchObject({ ok: false });
+	});
+
+	it("BUILDABLE is every card except tokens", () => {
+		expect(BUILDABLE).not.toContain("sludge");
+		expect(BUILDABLE).toHaveLength(25);
 	});
 });
