@@ -3,6 +3,7 @@
 
 import { animate, snapshot } from "./anim";
 import { cardFace, clearBoard, renderBoard, setPlayHandler } from "./board";
+import { deckForJoin } from "./deckbuilder";
 import { clearReveals, revealPlays } from "./reveal";
 import { play, playCues } from "./sound";
 import "./stage";
@@ -31,6 +32,7 @@ let lastView: PlayerView | null = null;
 let turnDeadline: number | null = null; // performance.now() timestamp
 
 $("create-btn").addEventListener("click", async () => {
+	if (!deckReady()) return;
 	setStatus("Creating room…");
 	const res = await fetch("/api/rooms", { method: "POST" });
 	if (!res.ok) return setStatus(`Could not create room (${res.status})`);
@@ -44,7 +46,17 @@ $("join-form").addEventListener("submit", (e) => {
 	if (code) connect(code);
 });
 
+/** A built deck must be legal before you can play it. Says why not in the status line. */
+function deckReady(): boolean {
+	const d = deckForJoin();
+	if (!d.ok) setStatus(`Your deck isn't ready: ${d.reason}. Fix it in Build deck.`);
+	return d.ok;
+}
+
 function connect(code: string): void {
+	const token = sessionStorage.getItem(tokenKey(code)) ?? undefined;
+	// Rejoining your own seat keeps the deck you joined with, so only a new seat needs a ready deck.
+	if (!token && !deckReady()) return showLobby();
 	socket?.close();
 	history.replaceState(null, "", `?room=${code}`);
 	setStatus(`Connecting to ${code}…`);
@@ -54,7 +66,8 @@ function connect(code: string): void {
 	socket = ws;
 
 	ws.addEventListener("open", () => {
-		send(ws, { type: "join", token: sessionStorage.getItem(tokenKey(code)) ?? undefined });
+		const d = deckForJoin();
+		send(ws, { type: "join", token: sessionStorage.getItem(tokenKey(code)) ?? undefined, deck: d.ok ? d.deck : undefined });
 	});
 
 	ws.addEventListener("message", (e) => {

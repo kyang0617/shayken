@@ -136,6 +136,133 @@ input::placeholder {
 	display: flex;
 	gap: 4px;
 }
+.deck-choice {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin-top: 8px;
+	color: var(--muted);
+}
+
+/* ---- Deck builder ---- */
+
+#builder {
+	position: absolute;
+	inset: 0;
+}
+.builder-head {
+	position: absolute;
+	left: 12px;
+	right: 12px;
+	top: 12px;
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+}
+.builder-head h2 {
+	font-size: 16px;
+	color: var(--gold);
+	text-shadow: 1px 1px var(--ink);
+}
+#deck-problem {
+	color: #e08070;
+}
+#deck-problem.ok {
+	color: var(--muted);
+}
+#pool {
+	position: absolute;
+	left: 12px;
+	top: 40px;
+	width: 372px;
+	display: grid;
+	grid-template-columns: repeat(3, 1fr);
+	gap: 3px;
+}
+#deck-list {
+	position: absolute;
+	left: 396px;
+	top: 40px;
+	width: 122px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+#builder-preview {
+	position: absolute;
+	left: 530px;
+	top: 40px;
+	pointer-events: none;
+}
+.builder-actions {
+	position: absolute;
+	right: 12px;
+	bottom: 12px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+/* One card on one line: art, name, cost. A stripe in the card type's colour on the left. */
+.tile {
+	--color: var(--skill);
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	height: 22px;
+	padding: 0 4px 0 5px;
+	background: var(--panel);
+	border: 1px solid var(--ink);
+	box-shadow: inset 2px 0 var(--color);
+	color: var(--muted);
+	font: 8px/1 "Tiny5", monospace;
+	text-align: left;
+	cursor: pointer;
+}
+.tile.attack {
+	--color: var(--attack);
+}
+.tile.power {
+	--color: var(--power);
+}
+.tile img {
+	width: 16px;
+	height: 16px;
+	opacity: 0.5;
+}
+.tile .tname {
+	flex: 1;
+	white-space: nowrap;
+	overflow: hidden;
+}
+.tile .tcost {
+	color: #8ab0ff;
+}
+.tile:hover {
+	background: var(--panel-light);
+}
+/* In the deck: lit up and outlined. */
+.tile.in,
+#deck-list .tile {
+	color: var(--text);
+}
+.tile.in img,
+#deck-list .tile img {
+	opacity: 1;
+}
+.tile.in {
+	border-color: var(--gold);
+}
+#deck-list .tile {
+	height: 11px;
+	padding-left: 4px;
+}
+#deck-list .tile img {
+	display: none;
+}
 [hidden] {
 	display: none !important;
 }
@@ -144,7 +271,7 @@ input::placeholder {
 	position: absolute;
 	left: 0;
 	right: 0;
-	top: 260px;
+	top: 290px;
 	text-align: center;
 	color: var(--text);
 	text-shadow: 1px 1px var(--ink);
@@ -490,7 +617,7 @@ input::placeholder {
 
 /* Full card face: hand, preview, result screen. */
 #hand .card,
-:is(#preview, #reveal) .card,
+:is(#preview, #reveal, #builder-preview) .card,
 #fx .card.full {
 	position: relative;
 	width: 56px;
@@ -506,7 +633,7 @@ input::placeholder {
 	color: var(--ink);
 }
 #hand .card .art,
-:is(#preview, #reveal) .card .art,
+:is(#preview, #reveal, #builder-preview) .card .art,
 #fx .card.full .art {
 	margin-top: 6px;
 	width: 44px;
@@ -517,13 +644,13 @@ input::placeholder {
 	border: 1px solid var(--ink);
 }
 #hand .card .art img,
-:is(#preview, #reveal) .card .art img,
+:is(#preview, #reveal, #builder-preview) .card .art img,
 #fx .card.full .art img {
 	width: 32px;
 	height: 32px;
 }
 #hand .card .cost,
-:is(#preview, #reveal) .card .cost,
+:is(#preview, #reveal, #builder-preview) .card .cost,
 #fx .card.full .cost {
 	position: absolute;
 	left: -3px;
@@ -543,7 +670,7 @@ input::placeholder {
 	box-shadow: inset 1px 1px #ff8ab0;
 }
 #hand .card .name,
-:is(#preview, #reveal) .card .name,
+:is(#preview, #reveal, #builder-preview) .card .name,
 #fx .card.full .name {
 	font: 8px/7px "Tiny5", monospace;
 	text-align: center;
@@ -637,34 +764,34 @@ input::placeholder {
 		opacity: 0;
 	}
 }
-:is(#preview, #reveal) .card {
+:is(#preview, #reveal, #builder-preview) .card {
 	width: 84px;
 	height: auto;
 	min-height: 116px;
 	gap: 4px;
 }
-:is(#preview, #reveal) .card .art {
+:is(#preview, #reveal, #builder-preview) .card .art {
 	width: 72px;
 	height: 44px;
 }
-:is(#preview, #reveal) .card .name {
+:is(#preview, #reveal, #builder-preview) .card .name {
 	font: 16px/1 "Silkscreen", monospace;
 	font-size: 8px;
 }
-:is(#preview, #reveal) .card .text {
+:is(#preview, #reveal, #builder-preview) .card .text {
 	font: 8px/8px "Tiny5", monospace;
 	text-align: center;
 	padding: 0 2px 3px;
 }
 /* Long text (board.ts adds .dense): smaller art, tighter gaps and lines. */
-:is(#preview, #reveal) .card.dense {
+:is(#preview, #reveal, #builder-preview) .card.dense {
 	gap: 2px;
 }
-:is(#preview, #reveal) .card.dense .art {
+:is(#preview, #reveal, #builder-preview) .card.dense .art {
 	margin-top: 4px;
 	height: 34px;
 }
-:is(#preview, #reveal) .card.dense .text {
+:is(#preview, #reveal, #builder-preview) .card.dense .text {
 	line-height: 7px;
 }
 
