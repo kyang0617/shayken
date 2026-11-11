@@ -3,6 +3,7 @@
 
 import { animate, snapshot } from "./anim";
 import { cardFace, clearBoard, renderBoard, setPlayHandler } from "./board";
+import { clearReveals, revealPlays } from "./reveal";
 import { play, playCues } from "./sound";
 import "./stage";
 import { CloseCode, type ClientMessage, type CreateRoomResponse, type PlayerView, type ServerMessage } from "../shared/protocol";
@@ -102,6 +103,7 @@ function render(view: PlayerView): void {
 	const snap = snapshot();
 	renderBoard(view);
 	playCues(prev, view, animate(snap, prev, view));
+	revealPlays(prev, view);
 
 	// Local deadline from the server's relative msLeft, so a wrong client clock doesn't matter.
 	turnDeadline = view.turn ? performance.now() + view.turn.msLeft : null;
@@ -216,6 +218,7 @@ function leaveToLobby(code: string | undefined, status: string): void {
 	if (code) sessionStorage.removeItem(tokenKey(code));
 	lastView = null;
 	clearBoard();
+	clearReveals();
 	$("result").hidden = true;
 	resultDismissed = false;
 	setRoomClosed(false);
