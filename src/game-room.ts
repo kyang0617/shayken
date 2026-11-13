@@ -8,10 +8,8 @@ import {
 	type Seat,
 	type ServerMessage,
 } from "../shared/protocol";
-import type { CardId } from "../shared/cards";
-import { STARTER_DECK, validateDeck } from "../shared/decks";
 import { randomToken } from "./random";
-import { concede, endTurn, newPlayer, noHexes, otherSeat, playCard, rematch, startMatch, type ActionResult } from "./rules";
+import { concede, endTurn, noHexes, otherSeat, playCard, rematch, startMatch, takeSeat, type ActionResult } from "./rules";
 import type { PlayerState, RoomState } from "./state";
 
 // What we attach to each WebSocket. Attachments survive hibernation; instance fields don't.
@@ -222,16 +220,9 @@ export class GameRoom extends DurableObject<Env> {
 		} else {
 			const open = room.players.findIndex((p) => p === null);
 			if (open === -1) return this.rejectJoin(ws, "ROOM_FULL", "Room already has two players");
-			// The deck comes from the client (its own storage), so it's only a request: the server
-			// checks it with the same rules the deck builder shows. No deck = the starter.
-			let deckList: readonly CardId[] = STARTER_DECK;
-			if (deck !== undefined) {
-				const check = validateDeck(deck);
-				if (!check.ok) return this.rejectJoin(ws, "BAD_DECK", check.reason);
-				deckList = check.deck;
-			}
 			seat = open as Seat;
-			room.players[seat] = newPlayer(randomToken(), deckList);
+			const taken = takeSeat(room, seat, randomToken(), deck); // checks the deck they asked for
+			if (!taken.ok) return this.rejectJoin(ws, taken.code, taken.message);
 		}
 
 		ws.serializeAttachment({ seat } satisfies SocketAttachment);

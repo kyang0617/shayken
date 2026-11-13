@@ -194,8 +194,33 @@ if (view(d0).turn.seat !== view(d0).you.seat) {
 const hand = view(d0).you.hand.map((x) => x.cardId);
 check(hand.length === 5 && view(d0).you.deckCount === 15, "custom deck has 20 cards");
 check(hand.every((id) => custom.includes(id)), "custom player's hand comes from their own list");
-const reclaim = await join(dg, d0.last("joined").token, ["fire_salt"]);
-check(reclaim.last("joined")?.seat === view(d0).you.seat, "reclaiming a seat ignores any deck sent");
+// Reclaim the seat sending a different legal deck (the starter list has Fire Salt, which the
+// custom deck doesn't). The server must keep the deck chosen on joining: a rematch deals from it.
+const starter = [
+  "fire_salt", "frost_lichen", "nightshade", "wyrm_bile", "phoenix_feather", "distillate", "philosophers_salt",
+  "bottled_spark", "moonwater", "honey_mead", "starlight_dust", "mandrake_root",
+  "curdle", "sludge_flask", "siphon", "unstable_fumes", "bitter_draught", "fog", "seal", "choking_smoke",
+];
+const reclaim = await join(dg, d0.last("joined").token, starter);
+check(reclaim.last("joined")?.seat === view(d0).you.seat, "reclaiming a seat with a deck still gets the seat back");
+await act(d1, { type: "concede" });
+await reclaim.until((c) => view(c).status === "finished");
+await act(reclaim, { type: "rematch" });
+await act(d1, { type: "rematch" });
+await reclaim.until((c) => view(c).status === "playing");
+await d1.until((c) => view(c).status === "playing");
+// Four of the reclaimer's turns draw all 20 cards, so a swapped deck can't pass by luck.
+const drawn = new Set();
+for (let i = 0; i < 4; i++) {
+  if (view(reclaim).turn.seat !== view(reclaim).you.seat) {
+    await act(d1, { type: "endTurn" });
+    await reclaim.until((c) => view(c).turn.seat === view(c).you.seat);
+  }
+  view(reclaim).you.hand.forEach((x) => drawn.add(x.cardId));
+  await act(reclaim, { type: "endTurn" });
+  await d1.until((c) => view(c).turn.seat === view(c).you.seat);
+}
+check(drawn.size === 20 && [...drawn].every((id) => custom.includes(id)), "reclaiming a seat ignores any deck sent (the rematch deals the original deck)");
 reclaim.ws.close(); d1.ws.close();
 
 finish();

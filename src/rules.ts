@@ -6,7 +6,7 @@
 
 import { brewDamage, damageAfterShield, explosionDamage } from "../shared/brew";
 import { CARDS, type CardDef, type CardId, type CardInstance, type Disruption, type Effect, type ThrowEffect } from "../shared/cards";
-import { STARTER_DECK } from "../shared/decks";
+import { STARTER_DECK, validateDeck } from "../shared/decks";
 import type { ErrorCode, Hexes, Seat } from "../shared/protocol";
 import { ESSENCE_PER_TURN, HAND_SIZE, SHIELD_STEPS, STARTING_HEALTH, VOLATILE_FUSE_TURNS } from "../shared/rules";
 import { randomInt, shuffle } from "./random";
@@ -21,6 +21,7 @@ export const otherSeat = (seat: Seat): Seat => (seat === 0 ? 1 : 0);
 
 export const noHexes = (): Hexes => ({ costUp: 0, drawLimit: null, sealed: false });
 
+/** A fresh player. No deck list = the starter: the one place that default is decided. */
 export function newPlayer(token: string, deckList: readonly CardId[] = STARTER_DECK): PlayerState {
 	return {
 		token, deckList: [...deckList], health: STARTING_HEALTH, essence: 0, shield: SHIELD_STEPS[0], deck: [], hand: [], discard: [], brew: [], powers: [],
@@ -28,10 +29,28 @@ export function newPlayer(token: string, deckList: readonly CardId[] = STARTER_D
 	};
 }
 
+/**
+ * A new player takes the open `seat` with the deck they asked for. The deck comes from the
+ * client (its own storage), so it's only a request: it's checked with the same rules the deck
+ * builder shows, and a deck that breaks them is refused. No deck = the starter.
+ */
+export function takeSeat(room: RoomState, seat: Seat, token: string, deck: unknown): ActionResult {
+	if (room.players[seat]) return fail("ROOM_FULL", "That seat is taken");
+	let list: CardId[] | undefined;
+	if (deck !== undefined) {
+		const check = validateDeck(deck);
+		if (!check.ok) return fail("BAD_DECK", check.reason);
+		list = check.deck;
+	}
+	room.players[seat] = newPlayer(token, list);
+	return OK;
+}
+
 /** Both seats are filled: shuffle each deck, flip for who goes first, start turn 1. */
 export function startMatch(room: RoomState, turnMs: number, now: number): void {
 	for (const [seat, player] of room.players.entries()) {
-		// Each player's own list. It was validated when they joined, so only the server's copy is used.
+		// Each player's own list, validated when they took their seat. (`??` only for rooms saved
+		// before deckbuilding, whose players have no list.)
 		const deck = (player!.deckList ?? STARTER_DECK).map((cardId, i): CardInstance => ({ iid: `p${seat}-${i}`, cardId }));
 		player!.deck = shuffle(deck);
 	}

@@ -6,7 +6,7 @@ import type { CardId, CardInstance } from "../../shared/cards";
 import { brewDamage, damageAfterShield, explosionDamage } from "../../shared/brew";
 import { BUILDABLE, DECK_SIZE, STARTER_DECK, validateDeck } from "../../shared/decks";
 import { ESSENCE_PER_TURN, HAND_SIZE, SHIELD_STEPS, STARTING_HEALTH } from "../../shared/rules";
-import { concede, endTurn, newPlayer, playCard, rematch, startMatch } from "../../src/rules";
+import { concede, endTurn, newPlayer, playCard, rematch, startMatch, takeSeat } from "../../src/rules";
 import type { RoomState } from "../../src/state";
 
 const TURN_MS = 60_000;
@@ -656,6 +656,36 @@ describe("rematch", () => {
 		const active = room.players[room.turn!.seat]!;
 		expect(active.hand).toHaveLength(HAND_SIZE);
 		expect(active.essence).toBe(ESSENCE_PER_TURN);
+	});
+});
+
+describe("takeSeat", () => {
+	const open = (): RoomState => ({ ...newRoom(), players: [null, null] });
+
+	it("no deck: the starter", () => {
+		const room = open();
+		expect(takeSeat(room, 0, "tok0", undefined)).toEqual({ ok: true });
+		expect(room.players[0]).toMatchObject({ token: "tok0", deckList: [...STARTER_DECK] });
+	});
+
+	it("a legal deck: that deck", () => {
+		const room = open();
+		const custom = BUILDABLE.slice(BUILDABLE.length - DECK_SIZE);
+		expect(takeSeat(room, 1, "tok1", [...custom]).ok).toBe(true);
+		expect(room.players[1]!.deckList).toEqual(custom);
+	});
+
+	it("a deck breaking the rules is refused and the seat stays open", () => {
+		const room = open();
+		expect(takeSeat(room, 0, "tok0", ["fire_salt"])).toMatchObject({ ok: false, code: "BAD_DECK" });
+		expect(takeSeat(room, 0, "tok0", "nope")).toMatchObject({ ok: false, code: "BAD_DECK" });
+		expect(room.players[0]).toBeNull();
+	});
+
+	it("a taken seat is refused", () => {
+		const room = newRoom();
+		expect(takeSeat(room, 0, "other", undefined)).toMatchObject({ ok: false, code: "ROOM_FULL" });
+		expect(room.players[0]!.token).toBe("tok0");
 	});
 });
 
