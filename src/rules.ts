@@ -131,6 +131,7 @@ export function rematch(room: RoomState, seat: Seat, turnMs: number, now: number
 	room.rematchVotes = [false, false];
 	room.lastThrow = null;
 	room.lastExplosion = null;
+	room.lastPlay = null;
 	// The post-match expiry belonged to the match that just ended. persist() sets a new one
 	// when this one finishes.
 	delete room.expiresAt;

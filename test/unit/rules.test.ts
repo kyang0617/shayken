@@ -629,7 +629,7 @@ describe("rematch", () => {
 		const room = finished();
 		rematch(room, 1, TURN_MS, NOW);
 		rematch(room, 0, TURN_MS, NOW);
-		expect(room).toMatchObject({ status: "playing", winner: null, lastThrow: null, lastExplosion: null, rematchVotes: [false, false] });
+		expect(room).toMatchObject({ status: "playing", winner: null, lastThrow: null, lastExplosion: null, lastPlay: null, rematchVotes: [false, false] });
 		expect(room.expiresAt).toBeUndefined();
 		expect(room.turn).toMatchObject({ number: 1, endsAt: NOW + TURN_MS });
 		expect(room.players.map((p) => p!.token)).toEqual(["tok0", "tok1"]);
