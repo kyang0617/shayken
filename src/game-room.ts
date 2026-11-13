@@ -9,7 +9,7 @@ import {
 	type ServerMessage,
 } from "../shared/protocol";
 import { randomToken } from "./random";
-import { concede, endTurn, newPlayer, noHexes, otherSeat, playCard, rematch, startMatch, type ActionResult } from "./rules";
+import { concede, endTurn, noHexes, otherSeat, playCard, rematch, startMatch, takeSeat, type ActionResult } from "./rules";
 import type { PlayerState, RoomState } from "./state";
 
 // What we attach to each WebSocket. Attachments survive hibernation; instance fields don't.
@@ -169,7 +169,7 @@ export class GameRoom extends DurableObject<Env> {
 
 		switch (msg.type) {
 			case "join":
-				return this.handleJoin(ws, msg.token);
+				return this.handleJoin(ws, msg.token, msg.deck);
 			case "playCard":
 				return this.handleAction(ws, (room, seat) => playCard(room, seat, msg.iid));
 			case "endTurn":
@@ -204,7 +204,7 @@ export class GameRoom extends DurableObject<Env> {
 
 	// ---- Handlers ----
 
-	private handleJoin(ws: WebSocket, token: string | undefined): void {
+	private handleJoin(ws: WebSocket, token: string | undefined, deck: string[] | undefined): void {
 		const room = this.load();
 		if (!room) return this.rejectJoin(ws, "ROOM_NOT_FOUND", "No room with that code");
 		if (getAttachment(ws).seat !== null) return this.sendError(ws, "BAD_MESSAGE", "Already joined");
@@ -221,7 +221,8 @@ export class GameRoom extends DurableObject<Env> {
 			const open = room.players.findIndex((p) => p === null);
 			if (open === -1) return this.rejectJoin(ws, "ROOM_FULL", "Room already has two players");
 			seat = open as Seat;
-			room.players[seat] = newPlayer(randomToken());
+			const taken = takeSeat(room, seat, randomToken(), deck); // checks the deck they asked for
+			if (!taken.ok) return this.rejectJoin(ws, taken.code, taken.message);
 		}
 
 		ws.serializeAttachment({ seat } satisfies SocketAttachment);
@@ -373,7 +374,9 @@ function parseClientMessage(raw: string | ArrayBuffer): ClientMessage | null {
 	switch (msg.type) {
 		case "join":
 			if (msg.token !== undefined && typeof msg.token !== "string") return null;
-			return { type: "join", token: msg.token };
+			// Only the shape here; whether it's a legal deck is handleJoin's job (BAD_DECK, not BAD_MESSAGE).
+			if (msg.deck !== undefined && (!Array.isArray(msg.deck) || msg.deck.length > 100)) return null;
+			return { type: "join", token: msg.token, deck: msg.deck };
 		case "playCard":
 			if (typeof msg.iid !== "string" || msg.iid.length > 64) return null;
 			return { type: "playCard", iid: msg.iid };

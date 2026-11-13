@@ -21,6 +21,27 @@
 					<input id="code-input" placeholder="CODE" maxlength="6" autocomplete="off" spellcheck="false" />
 					<button type="submit" class="btn">Join</button>
 				</form>
+				<div class="deck-choice">
+					<span id="deck-label"></span>
+					<button id="build-btn" class="btn small">Build deck</button>
+				</div>
+			</section>
+
+			<!-- Deck builder (client/deckbuilder.ts): click a card to add or remove it. -->
+			<section id="builder" hidden>
+				<div class="builder-head">
+					<h2>Build deck</h2>
+					<span id="deck-count"></span>
+					<span id="deck-problem"></span>
+				</div>
+				<div id="pool"></div>
+				<ol id="deck-list"></ol>
+				<div id="builder-preview"></div>
+				<div class="builder-actions">
+					<button id="deck-starter" class="btn small">Reset to starter</button>
+					<button id="deck-clear" class="btn small">Clear</button>
+					<button id="deck-done" class="btn">Done</button>
+				</div>
 			</section>
 
 			<section id="game" hidden>

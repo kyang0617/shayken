@@ -17,8 +17,12 @@ export interface CreateRoomResponse {
 // Messages express intent ("I want to play this card"), never outcomes. The server decides
 // whether it's legal and what happens.
 export type ClientMessage =
-	/** First message after connecting. Send your token to reclaim your seat; omit it to take an open one. */
-	| { type: "join"; token?: string }
+	/**
+	 * First message after connecting. Send your token to reclaim your seat; omit it to take an
+	 * open one. `deck` is the deck you want to play (omit it for the starter). The server checks it
+	 * with validateDeck and ignores it when reclaiming a seat, so decks can't change mid-match.
+	 */
+	| { type: "join"; token?: string; deck?: string[] }
 	/** Play a card from your hand, identified by its instance id. */
 	| { type: "playCard"; iid: string }
 	/** End your turn. With `throw: true`, your brew is thrown at the opponent first. */
@@ -41,6 +45,7 @@ export type ErrorCode =
 	| "BAD_MESSAGE"
 	| "NOT_JOINED"
 	| "ROOM_EXPIRED"
+	| "BAD_DECK"
 	// Rejected game actions:
 	| "NOT_PLAYING"
 	| "NOT_FINISHED"
