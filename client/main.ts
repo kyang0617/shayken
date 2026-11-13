@@ -14,6 +14,7 @@ const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as 
 const stage = $("stage");
 const lobby = $("lobby");
 const game = $("game");
+const builder = $("builder");
 const statusEl = $("status");
 const codeInput = $<HTMLInputElement>("code-input");
 const endTurnBtn = $<HTMLButtonElement>("end-turn-btn");
@@ -55,8 +56,16 @@ function deckReady(): boolean {
 
 function connect(code: string): void {
 	const token = sessionStorage.getItem(tokenKey(code)) ?? undefined;
-	// Rejoining your own seat keeps the deck you joined with, so only a new seat needs a ready deck.
-	if (!token && !deckReady()) return showLobby();
+	// Read the deck now, when the player clicked, and send exactly this: editing it while the
+	// socket opens mustn't change (or silently drop) what you join with. Rejoining your own seat
+	// keeps the deck you joined with, so only a new seat needs a ready deck.
+	const chosen = deckForJoin();
+	if (!token && !chosen.ok) {
+		// Keep the code (e.g. from a shared link) so they can join once the deck is fixed.
+		codeInput.value = code;
+		showLobby();
+		return setStatus(`Your deck isn't ready: ${chosen.reason}. Fix it in Build deck, then join ${code}.`);
+	}
 	socket?.close();
 	history.replaceState(null, "", `?room=${code}`);
 	setStatus(`Connecting to ${code}…`);
@@ -66,8 +75,7 @@ function connect(code: string): void {
 	socket = ws;
 
 	ws.addEventListener("open", () => {
-		const d = deckForJoin();
-		send(ws, { type: "join", token: sessionStorage.getItem(tokenKey(code)) ?? undefined, deck: d.ok ? d.deck : undefined });
+		send(ws, { type: "join", token: sessionStorage.getItem(tokenKey(code)) ?? undefined, deck: chosen.ok ? chosen.deck : undefined });
 	});
 
 	ws.addEventListener("message", (e) => {
@@ -111,6 +119,7 @@ function render(view: PlayerView): void {
 	const prev = lastView;
 	lastView = view;
 	lobby.hidden = true;
+	builder.hidden = true; // in case it was opened while connecting
 	game.hidden = false;
 	stage.dataset.screen = "game";
 	const snap = snapshot();
@@ -304,6 +313,7 @@ function resetConcede(): void {
 
 function showLobby(): void {
 	lobby.hidden = false;
+	builder.hidden = true;
 	game.hidden = true;
 	stage.dataset.screen = "lobby";
 	history.replaceState(null, "", location.pathname);

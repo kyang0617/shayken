@@ -83,14 +83,24 @@ function edit(change: (deck: CardId[]) => void): void {
 }
 
 function add(id: CardId): void {
-	edit((deck) => {
-		if (count(id) < MAX_COPIES) deck.push(id);
-		else deck.splice(0, deck.length, ...deck.filter((c) => c !== id)); // at the limit: clicking again takes it out
-	});
+	// At the copy limit, clicking again takes the card out.
+	if (count(id) >= MAX_COPIES) return edit((deck) => deck.splice(0, deck.length, ...deck.filter((c) => c !== id)));
+	if ((custom ?? STARTER_DECK).length >= DECK_SIZE) return showNotice("Deck is full: remove a card first");
+	edit((deck) => deck.push(id));
 }
 
 function remove(id: CardId): void {
-	edit((deck) => deck.splice(deck.indexOf(id), 1));
+	edit((deck) => {
+		const i = deck.indexOf(id);
+		if (i !== -1) deck.splice(i, 1);
+	});
+}
+
+/** A one-off message in place of the deck's status, until the next change. */
+function showNotice(text: string): void {
+	const problem = $("deck-problem");
+	problem.textContent = text;
+	problem.classList.remove("ok");
 }
 
 function showCard(id: CardId): void {
